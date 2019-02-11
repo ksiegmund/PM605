@@ -1,0 +1,64 @@
+---
+title: "Intro to Meta Analysis"
+author: "online documentation"
+date: "2/9/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages
+
+We will need to install the packages meta and metafor.
+
+* install.packages('meta')
+* install.packages('metafor')
+
+## Example
+
+First, we load some libraries and read in the data.
+
+```{r loadLibraries}
+suppressMessages(library(tidyverse))
+suppressMessages(library(readxl))
+suppressMessages(library(dplyr))
+suppressMessages(library(meta))
+suppressMessages(library(metafor))
+```
+
+Now we read in the Excel spreadsheet of data.
+
+```{r ReadData}
+exdata <- as.data.frame(read_xlsx("data/Binary_Data_Example.xlsx",sheet=1))
+exdata
+```
+
+* Tevents = Treatment group, number of events
+* TN = Treatment group, number of observations
+* Cevents = Control group, number of events
+* CN = Control group, number of observations
+
+Run the fixed effects model meta analysis for binary data.
+
+```{r FixedEffect}
+mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="I", data=exdata, studlab=Study)
+mb1
+```
+
+Now let's use a forest plot to display the summary data.
+```{r ForestPlot,fig.width=10,fig.height=4}
+forest(mb1)
+```
+
+
+Or we can simplify the figure, which allows for larger text.
+```{r SimpleForestPlot,fig.width=9,fig.height=5}
+forest(mb1, comb.random=FALSE, hetstat=FALSE)
+```
+
+```{r sessionInfo}
+sessionInfo()
+```
