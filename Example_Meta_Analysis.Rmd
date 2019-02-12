@@ -1,6 +1,6 @@
 ---
 title: "Intro to Meta Analysis"
-author: "online documentation"
+author: "K Siegmund"
 date: "2/9/2019"
 output: html_document
 ---
@@ -37,7 +37,6 @@ exdata
 * CN = Control group, number of observations
 
 
-
 Next, we run the fixed effects model meta analysis for binary data.
 
 ```{r FixedEffect}
@@ -56,7 +55,6 @@ Now let's use a forest plot to display the summary data.
 ```{r ForestPlot,fig.width=10,fig.height=4}
 forest(mb1)
 ```
-
 
 Or we can simplify the figure, which allows for larger text.
 ```{r SimpleForestPlot,fig.width=9,fig.height=4}
