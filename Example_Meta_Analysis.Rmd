@@ -9,29 +9,25 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Packages
+## Installing and Loading R Packages
 
-We will need to install the packages meta and metafor.
+We will need to install a few packages that are not in standard base r and load them.
 
-* install.packages('meta')
-* install.packages('metafor')
+```{r usePackages}
+for (pkg in c("tidyverse", "readxl","dplyr","meta","metafor")) {
+  if(!require(pkg, character.only = TRUE)) 
+    install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}
+print('Done installing &/or loading libraries')
+```
 
 ## Example
 
-First, we load some libraries and read in the data.
-
-```{r loadLibraries}
-suppressMessages(library(tidyverse))
-suppressMessages(library(readxl))
-suppressMessages(library(dplyr))
-suppressMessages(library(meta))
-suppressMessages(library(metafor))
-```
-
-Now we read in the Excel spreadsheet of data.
+Now, let's read in the data from the Excel spreadsheet. This example is taken from the textbook, **Introduction to Meta Analysis**, by Borenstein, Hedges, Higgins and Rothstein, 2009. John Wiley & Sons, Ltd.
 
 ```{r ReadData}
-exdata <- as.data.frame(read_xlsx("data/Binary_Data_Example.xlsx",sheet=1))
+exdata <- read_xlsx("data/Binary_Data_Example.xlsx",sheet=1)
 exdata
 ```
 
@@ -40,13 +36,21 @@ exdata
 * Cevents = Control group, number of events
 * CN = Control group, number of observations
 
-Run the fixed effects model meta analysis for binary data.
+
+
+Next, we run the fixed effects model meta analysis for binary data.
 
 ```{r FixedEffect}
 mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
                method="I", data=exdata, studlab=Study)
 mb1
 ```
+
+
+We get a (fixed effect) summary OR of 0.48 with 95\% confidence interval (CI) (0.36, 0.66)  ( p < 0.0001 ).
+
+Instead of just the fixed effects model, we also get the summary from the random effects model.  The output tells us that it uses the DerSimonian-Laird estimator for tau^2 in the random effects model. The summary OR estimate from the random effects model is 0.57 (95\% CI: 0.36-0.91) ( p < 0.02 ). 
+There are other methods we can consider for estimating the summary from the random effects model. I'll leave this discussion for later.
 
 Now let's use a forest plot to display the summary data.
 ```{r ForestPlot,fig.width=10,fig.height=4}
@@ -55,7 +59,7 @@ forest(mb1)
 
 
 Or we can simplify the figure, which allows for larger text.
-```{r SimpleForestPlot,fig.width=9,fig.height=5}
+```{r SimpleForestPlot,fig.width=9,fig.height=4}
 forest(mb1, comb.random=FALSE, hetstat=FALSE)
 ```
 
