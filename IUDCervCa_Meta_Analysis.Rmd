@@ -27,7 +27,7 @@ print('Done installing &/or loading libraries')
 Now, let's read in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
 
 ```{r ReadData}
-data <- read_dta("~kims/Google Drive File Stream/My Drive/PM605/IUD-CCstudy/Data/CCaMetaAPaper.dta")
+data <- read_dta("data/CCaMetaAPaper.dta")
 data
 ```
 
