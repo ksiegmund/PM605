@@ -22,9 +22,9 @@ for (pkg in c("tidyverse","haven","dplyr","meta","metafor")) {
 print('Done installing &/or loading libraries')
 ```
 
-## Example
+## Example: IUD use and Cervical Cancer
 
-Now, let's read in the data from the paper IUD use and cervical can
+Now, let's read in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
 
 ```{r ReadData}
 data <- read_dta("~kims/Google Drive File Stream/My Drive/PM605/IUD-CCstudy/Data/CCaMetaAPaper.dta")
@@ -49,16 +49,19 @@ Next, we run both a fixed effect and random effects meta analysis in a single co
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data, backtransf = FALSE)
 summary(ma)
 ```
-```{r MetaA}
+
+And if we drop the option backtransf = FALSE, we get the results on the OR scale.
+
+```{r MetaA_OR}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data)
 summary(ma)
 ```
 
 Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
-```{r ForestPlot,fig.width=5,fig.height=4}
+
+```{r ForestPlot,fig.width=8,fig.height=6}
 forest(ma, comb.fixed=FALSE)
 ```
-
 
 Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
 ```{r bystudytype}
@@ -66,7 +69,11 @@ ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", 
 summary(ma)
 ```
 
-Unfortunately we lost the naming of the categorical variable when we read in the data set. We should go back and fix this later.
+```{r ForestPlot2,fig.width=8,fig.height=8}
+forest(ma, comb.fixed=FALSE)
+```
+
+It appears that the effect estimate does not vary depending on the desing of the study (good). Unfortunately we lost the naming of the categorical variable when we read in the data set. I will go back and fix this later.
 
 stype 1 = Nested case-control
 
@@ -84,17 +91,24 @@ ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", 
 summary(ma)
 ```
 
+The estimates for the studies that did and did not control for SES are rather similar (OR = 0.63 vs 0.67, p = 0.83).  Now let's look whether they controlled for smoking.
+
 ```{r bysmoking}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = smoking, comb.fixed = F, data=data)
 summary(ma)
 ```
 
+The estimates for the studies that did and did not control for smoking are rather different (OR = 0.61 vs 0.81, p=0.053).
+
+Finally, we'll run a meta-regression to see if the OR varies as a function of the HPV rate or the Age-adjusted incidence rate.
 
 ```{r reg_hpvrate}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
 ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
 print(ma.mr)
 ```
+
+The OR doesn't vary as a function of the HPV rate.
 
 ```{r bubbleplot}
 bubble(ma.mr)
@@ -105,6 +119,7 @@ ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", 
 metareg(ma,~hpvrate+aair,method.tau = "REML")
 ```
 
+If we consider HPV rate and age-adjusted incidence rate in the model together, we find the association between IUD use and cervical cancer varies as a function of the age-adjusted incidence rate adjusting for HPV rate.
 ```{r sessionInfo}
 sessionInfo()
 ```
