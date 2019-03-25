@@ -1,0 +1,110 @@
+---
+title: "IUD use and Cervical Cancer Meta Analysis"
+author: "K Siegmund"
+date: "3/25/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Installing and Loading R Packages
+
+We will need to install a few packages that are not in standard base r and load them.
+
+```{r usePackages}
+for (pkg in c("tidyverse","haven","dplyr","meta","metafor")) {
+  if(!require(pkg, character.only = TRUE)) 
+    install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}
+print('Done installing &/or loading libraries')
+```
+
+## Example
+
+Now, let's read in the data from the paper IUD use and cervical can
+
+```{r ReadData}
+data <- read_dta("~kims/Google Drive File Stream/My Drive/PM605/IUD-CCstudy/Data/CCaMetaAPaper.dta")
+data
+```
+
+The effect size from these studies are odds ratios. These will get analyzed on the log scale so we have to transform the data to get the log OR, and it's standard error.  The standard error for the log OR is obtained from its confidence interval. 
+
+```{r DataPrep}
+data <- data %>% 
+  mutate(
+  lnes = log(es),
+  lnl95 = log(l95),
+  lnu95 = log(u95),
+  selnes = (lnu95-lnl95)/3.919928
+  )
+```
+
+Next, we run both a fixed effect and random effects meta analysis in a single command.
+
+```{r MetaA}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data, backtransf = FALSE)
+summary(ma)
+```
+```{r MetaA}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data)
+summary(ma)
+```
+
+Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
+```{r ForestPlot,fig.width=5,fig.height=4}
+forest(ma, comb.fixed=FALSE)
+```
+
+
+Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
+```{r bystudytype}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
+summary(ma)
+```
+
+Unfortunately we lost the naming of the categorical variable when we read in the data set. We should go back and fix this later.
+
+stype 1 = Nested case-control
+
+stype 2 = Population-based
+
+stype 3 = Clinic-based/hospital
+
+stype 4 = other
+
+
+Now we will stratify the estimates by whether or not the study controlled for important covariates such as SES or smoking history in their analysis. 
+
+```{r byses}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = ses, comb.fixed=F, data=data)
+summary(ma)
+```
+
+```{r bysmoking}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = smoking, comb.fixed = F, data=data)
+summary(ma)
+```
+
+
+```{r reg_hpvrate}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
+ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
+print(ma.mr)
+```
+
+```{r bubbleplot}
+bubble(ma.mr)
+```
+
+```{r multivreg}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
+metareg(ma,~hpvrate+aair,method.tau = "REML")
+```
+
+```{r sessionInfo}
+sessionInfo()
+```
