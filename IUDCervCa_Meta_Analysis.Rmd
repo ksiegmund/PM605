@@ -22,9 +22,9 @@ for (pkg in c("tidyverse","haven","dplyr","meta","metafor")) {
 print('Done installing &/or loading libraries')
 ```
 
-## Example: IUD use and Cervical Cancer
+# Example: IUD use and Cervical Cancer
 
-Now, let's read in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
+Let's begin by reading in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
 
 ```{r ReadData}
 data <- read_dta("data/CCaMetaAPaper.dta")
@@ -42,6 +42,8 @@ data <- data %>%
   selnes = (lnu95-lnl95)/3.919928
   )
 ```
+
+## Meta-Analysis
 
 Next, we run both a fixed effect and random effects meta analysis in a single command.
 
@@ -63,6 +65,148 @@ Now let's use a forest plot to display the summary data. I'm going to drop the f
 forest(ma, comb.fixed=FALSE)
 ```
 
+## Methods to Evaluate Bias
+
+There are many ways to get biased estimates in a meta-analysis. One concern is publication bias. If investigators only publish findings that achieve statistical significance, only small studies with large effect sizes will achieve statistical signficance.  Including this biased subset of small studies can inflate the effect size away from the null. Small clinical studies might have biased effect sizes due to selection bias of the patients.  Only patients thought to be benefitted by a drug will be included. A series of methods are proposed to evaluate bias due to small studies.
+
+### 1. Funnel Plot
+
+A Funnel plot is a scatter diagram of standard error vs the effect size. In this study it's a plot of the SE(logOR) vs logOR.
+
+```{r funnelplot}
+funnel(ma)
+```
+
+The vertial dashed line gives the fixed effect estimate and the diagonal lines the 95% confidence interval limits. The vertical dotted line gives the mean estimate from the random effects model.  Since the width of the confidence interval is a constant times the standard error, choosing the standard error for the vertical axis yields straight lines for the confidence interval limits.  
+
+We are looking to see if studies with large standard error (small n) are equally distributed around the summary estimate.
+
+### 2. Radial Plot
+
+Another plot for studying small-study bias is called the radial plot. This is a plot of the standardized treatment effect vs the inverse standard error (e.g. log OR/se(log OR)  vs. 1/se(log OR)).  
+
+```{r RadialPlot}
+radial(ma)
+```
+
+Some properties of the regression line in this figure:
+1. Var($y_k$) = 1.
+2. For each study, the slope of the line from (0,0) to ($x_i$,$y_i$) gives the logOR.
+3. For large se(logOR), points are near 0 on X axis
+4. For a fixed effects model,  $y_k = \beta_1 x_k$
+
+If there are no small-study effects (biases), the studies are expected to scatter randomly about this line through the origin.
+
+####  Egger Test
+
+A common test for asymmetry is Egger's test.  For this, we fit a regression line to the data from the radial plot, and test if the line goes through the origin.
+
+Fit $y_k = \beta_0 + \beta_1 x_k + \epsilon$,  and test $\beta_0 = 0$.
+
+```{r EggerTest}
+et <- metabias(ma, method="linreg")
+et
+```
+
+We would conclude that there is asymmetry (p=0.03).
+
+```{r RadialPlot2}
+# The following code gives the same regression result
+#reg <- lm(I(ma$TE/ma$seTE) ~ I(1/ma$seTE))
+#summary(reg)
+radial(ma)
+abline(et$estimate[c(1,3)])
+```
+
+The different slopes between the solid line (best line fit) and line through the origin (yielding the fixed effect estimate) is due to asymmetry of funnel plot. 
+
+####  Test by Thompson and Sharp (Egger's Test under Mixed Effects model)
+
+```{r BiasTestREmodel}
+metabias(ma,method="mm")
+```
+
+When we allow for random effects in our model, we estimate less bias (-1.12 vs -1.33) (test of asymmetry p=0.07).
+
+###  3. Trim-and-Fill method
+
+1. Trim large effects with small n
+2. Run meta-analysis on subset of large, unbiased studies, consider this the true center of the funnel
+3. For each trimmed study, create a fake ('fill') study with the mirror image
+4. Estimate meta analysis with filled studies.
+
+```{r tandf}
+tf <- trimfill(ma)
+funnel(tf)
+```
+
+The open circles are filled-in studies.   
+
+```{r tfests}
+print(tf, digits=2, comb.fixed=TRUE)
+```
+
+Estimates from the fixed effect and random effects model are much more similar for the trim-and-fill model. This is because the small samples with large effect were given more weight in the original REs model allowing them to estimate a larger effect size. Now that their contributions are balanced with the filled-in studies, the random effects and FE models have more similar estimates.
+
+###  4. Cummulative Forest Plot
+
+Let's review perform more bias assessment using a cummulative forest plot. We will order these by standard error
+
+```{r CummabySEFP}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of sampling weight)
+tmp <- cumul(res, order=order(data$selnes))
+
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ ### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+Let's try this in order of publication year.
+
+```{r CummabyPubyearFP}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of publication year)
+tmp <- cumul(res, order=order(data$pub_year))
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ 
+### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+###  5. Influence Plots
+
+We can evaluate the influence of individual studies with a leave-one-out analysis.
+
+```{r metainf}
+mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
+forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
+```
+
+```{r metainfplot}
+forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
+```
+
+There is hardly a difference in the summary estimate if you omit any single study.
+
+## Assessing Heterogeneity
+
 Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
 ```{r bystudytype}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
@@ -83,8 +227,8 @@ stype 3 = Clinic-based/hospital
 
 stype 4 = other
 
-
 Now we will stratify the estimates by whether or not the study controlled for important covariates such as SES or smoking history in their analysis. 
+
 
 ```{r byses}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = ses, comb.fixed=F, data=data)
@@ -120,6 +264,7 @@ metareg(ma,~hpvrate+aair,method.tau = "REML")
 ```
 
 If we consider HPV rate and age-adjusted incidence rate in the model together, we find the association between IUD use and cervical cancer varies as a function of the age-adjusted incidence rate adjusting for HPV rate.
+
 ```{r sessionInfo}
 sessionInfo()
 ```
