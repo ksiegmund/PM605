@@ -1,0 +1,258 @@
+---
+title: "Pio use and Bladder Cancer Meta Analysis"
+author: "PM605 Class"
+date: "4/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Installing and Loading R Packages
+
+We will need to install a few packages that are not in standard base r and load them.
+
+```{r usePackages}
+for (pkg in c("tidyverse","readxl","haven","dplyr","meta","metafor")) {
+  if(!require(pkg, character.only = TRUE)) 
+    install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}
+print('Done installing &/or loading libraries')
+```
+
+# Levin (2015) Finland Data:  
+
+OR (95\% CI) in males:  0.59 (0.29-1.20)
+in females: 1.01 (0.21-4.76)
+
+```{r CombSex}
+levin <- matrix(c(0.59,0.29,1.20,1.01,0.21,4.76),byrow=T,ncol=3)
+colnames(levin) = c("es","l95","u95")
+levin <- as_tibble(levin)
+levin <- levin %>% 
+  mutate(
+  lnes = log(es),
+  lnl95 = log(l95),
+  lnu95 = log(u95),
+  selnes = (lnu95-lnl95)/3.919928
+  )
+levin
+```
+
+```{r MetaA_OR}
+ma <- metagen(TE=lnes, seTE=selnes, sm="OR", data=levin, comb.random=FALSE)
+summary(ma)
+forest(ma, comb.random=FALSE)
+```
+
+
+# Read in the Data
+
+```{r ReadData}
+data <- read_xlsx("data/20190401PioBlcaData.xlsx",sheet=1)
+data
+```
+
+The effect size from these studies are odds ratios. These will get analyzed on the log scale so we have to transform the data to get the log OR, and it's standard error.  The standard error for the log OR is obtained from its confidence interval. 
+
+```{r DataPrep}
+data <- data %>% 
+  mutate(
+  lnes = log(es),
+  lnl95 = log(l95),
+  lnu95 = log(u95),
+  selnes = (lnu95-lnl95)/3.919928
+  )
+```
+
+## Meta-Analysis
+
+Next, we run both a fixed effect and random effects meta analysis in a single command.
+
+
+```{r MetaA_OR}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data)
+summary(ma)
+```
+
+Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
+
+```{r ForestPlot,fig.width=8,fig.height=6}
+forest(ma, comb.fixed=FALSE)
+```
+
+Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
+```{r bystudytype}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
+summary(ma)
+```
+
+
+## Methods to Evaluate Bias
+
+There are many ways to get biased estimates in a meta-analysis. One concern is publication bias. The assumption for publication bias to occur is that only studies that are statistically significant are published. The bias is probably sample-size dependent, with small studies suffering larger bias. A series of methods are proposed to evaluate bias due to small studies.
+
+### 1. Funnel Plot
+
+A Funnel plot is a scatter diagram of standard error vs the effect size. In this study it's a plot of the SE(logOR) vs logOR.
+
+```{r funnelplot}
+funnel(ma)
+```
+
+The vertial dashed line gives the fixed effect estimate and the diagonal lines the 95% confidence interval limits. The vertical dotted line gives the mean estimate from the random effects model.  Since the width of the confidence interval is a constant times the standard error, choosing the standard error for the vertical axis yields straight lines for the confidence interval limits.  
+
+We are looking to see if studies with large standard error (small n) are equally distributed around the summary estimate.
+
+### 2. Radial Plot
+
+Another plot for studying small-study bias is called the radial plot. This is a plot of the standardized treatment effect vs the inverse standard error (e.g. log OR/se(log OR)  vs. 1/se(log OR)).  
+
+```{r RadialPlot}
+radial(ma)
+```
+
+Some properties of this figure under a fixed effects model:
+1. Var($y_k$) = 1.
+2. For each study, the slope of the line from (0,0) to ($x_i$,$y_i$) gives the logOR.
+3. For large se(logOR), points are near 0 on X axis
+4. For a fixed effects model,  $y_k = \beta_1 x_k$
+
+If there are no small-study effects (biases), the studies are expected to scatter randomly about this line close to the origin.
+
+####  Egger Test
+
+A common test for publication bias is Egger's test. For this, we fit a regression line to the data from the radial plot, and test if the line goes through the origin.
+
+Fit $y_k = \beta_0 + \beta_1 x_k + \epsilon$,  and test $\beta_0 = 0$.
+
+The intuition is that for large SE, small/negative effect sizes are less likely to get published. Thus, the studies near the origin will not be evenly scattered about the regression line, causing a bias in the intercept.
+
+```{r EggerTest}
+et <- metabias(ma, method="linreg")
+et
+```
+
+Conclusion??
+
+```{r RadialPlot2}
+# The following code gives the same regression result
+#reg <- lm(I(ma$TE/ma$seTE) ~ I(1/ma$seTE))
+#summary(reg)
+radial(ma)
+abline(et$estimate[c(1,3)])
+```
+
+The different slopes between the solid line (best fit line) and line through the origin (yielding the fixed effect estimate) is due to asymmetry of funnel plot. 
+
+####  Test by Thompson and Sharp (Egger's Test under Mixed Effects model)
+
+```{r BiasTestREmodel}
+metabias(ma,method="mm")
+```
+
+Do we see more or less bias under the mixed effects model?
+
+###  3. Trim-and-Fill method
+
+1. Trim large effects with small n
+2. Run meta-analysis on subset of large, unbiased studies, consider this the true center of the funnel
+3. For each trimmed study, create a fake ('fill') study with the mirror image
+4. Estimate meta analysis with filled studies.
+
+```{r tandf}
+tf <- trimfill(ma)
+funnel(tf)
+```
+
+The open circles are filled-in studies.   
+
+```{r tfests}
+print(tf, digits=2, comb.fixed=TRUE)
+```
+
+Now, how do the random effects and fixed effect summary estiamtes compare?
+
+###  4. Cummulative Forest Plot
+
+Another bias assessment tool is the cummulative forest plot. We will order these by publication year.
+
+```{r CummabySEFP}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of sampling weight)
+tmp <- cumul(res, order=order(data$pub_year))
+
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ ### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+What if we try this in order of standard error.
+
+```{r CummabyPubyearFP}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of publication year)
+tmp <- cumul(res, order=order(data$selnes))
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ 
+### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+###  5. Influence Plots
+
+We can evaluate the influence of individual studies with a leave-one-out analysis.
+
+```{r metainf}
+mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
+forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
+```
+
+There is hardly a difference in the summary estimate if you omit any single study.
+
+## Assessing Heterogeneity
+
+Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
+```{r bystudytype}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
+summary(ma)
+```
+
+```{r ForestPlot2,fig.width=8,fig.height=8}
+forest(ma, comb.fixed=FALSE)
+```
+
+Are there other covariates?  
+
+```{r reg_sexratio}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
+ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
+print(ma.mr)
+```
+
+
+```{r bubbleplot}
+bubble(ma.mr)
+```
+
+```{r sessionInfo}
+sessionInfo()
+```
