@@ -22,7 +22,9 @@ for (pkg in c("tidyverse","readxl","haven","dplyr","meta","metafor")) {
 print('Done installing &/or loading libraries')
 ```
 
-# Levin (2015) Finland Data:  
+## Levin (2015) Finland Data:  
+
+For this study, ORs are reported separately in males and females and a sex-adjusted estimate is not provided. We can summarize these to estimate the sex-adjusted summary that we carry forward in our study.
 
 OR (95\% CI) in males:  0.59 (0.29-1.20)
 in females: 1.01 (0.21-4.76)
@@ -41,14 +43,15 @@ levin <- levin %>%
 levin
 ```
 
-```{r MetaA_OR}
+```{r MetaA_combinesex}
 ma <- metagen(TE=lnes, seTE=selnes, sm="OR", data=levin, comb.random=FALSE)
-summary(ma)
+#summary(ma)
 forest(ma, comb.random=FALSE)
 ```
 
+This is the summary OR we can use for the sex-adjusted OR.
 
-# Read in the Data
+## Read in the Data
 
 ```{r ReadData}
 data <- read_xlsx("data/20190401classPioBlcaData.xlsx",sheet=1)
@@ -85,10 +88,13 @@ forest(ma, comb.fixed=FALSE)
 
 Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
 ```{r bystudytype}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
+mabyst <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
 summary(ma)
 ```
 
+```{r ForestPlotbySt,fig.width=8,fig.height=6}
+forest(mabyst, comb.fixed=FALSE)
+```
 
 ## Methods to Evaluate Bias
 
@@ -179,7 +185,7 @@ Now, how do the random effects and fixed effect summary estiamtes compare?
 
 Another bias assessment tool is the cummulative forest plot. We will order these by publication year.
 
-```{r CummabySEFP}
+```{r CummabyPubYrFP}
 ### fit random-effects models
 res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
  
@@ -187,34 +193,34 @@ res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "
 tmp <- cumul(res, order=order(data$pub_year))
 
  ### cumulative forest plot
-forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.75)
  
 ### switch to bold font
 par(cex=0.75, font=2)
  ### add column headings to the plot
-text(-4, 18, "Author(s) and Year",  pos=4)
-text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+text(-1, 14, "Author(s) and Year",  pos=4)
+text( 1, 14, "Odds Ratio [95% CI]", pos=2)
 ```
 
 What if we try this in order of standard error.
 
-```{r CummabyPubyearFP}
+```{r CummabyselnesFP}
 ### fit random-effects models
 res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
  
 ### cumulative meta-analysis (in the order of publication year)
 tmp <- cumul(res, order=order(data$selnes))
  ### cumulative forest plot
-forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.75)
  
 ### switch to bold font
 par(cex=0.75, font=2)
  
 ### add column headings to the plot
-text(-4, 18, "Author(s) and Year",  pos=4)
-text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+text(-1, 14, "Author(s) and Year",  pos=4)
+text( 1, 14, "Odds Ratio [95% CI]", pos=2)
 ```
 
 ###  5. Influence Plots
@@ -223,34 +229,35 @@ We can evaluate the influence of individual studies with a leave-one-out analysi
 
 ```{r metainf}
 mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
-forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
+forest(mi, at = c(0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6), xlim=c(0.8,1.6))
 ```
 
 There is hardly a difference in the summary estimate if you omit any single study.
 
 ## Assessing Heterogeneity
 
-Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
-```{r bystudytype}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
-summary(ma)
+The rest of this is place holders for the real covariate analysis to study heterogeneity.
+
+Here is sample code for using categorical covariates.
+```{r bystudytype2}
+#ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = #stype, comb.fixed=F, data=data)
+#summary(ma)
 ```
 
-```{r ForestPlot2,fig.width=8,fig.height=8}
-forest(ma, comb.fixed=FALSE)
+```{r ForestPlot3,fig.width=8,fig.height=8}
+#forest(ma, comb.fixed=FALSE)
 ```
 
-Are there other covariates?  
+Here is sample code for quantitative covariates (for metaregression). 
 
 ```{r reg_sexratio}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
-ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
-print(ma.mr)
+#ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed #= F, data=data[!is.na(data$hpvrate),])
+#ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
+#print(ma.mr)
 ```
 
-
 ```{r bubbleplot}
-bubble(ma.mr)
+#bubble(ma.mr)
 ```
 
 ```{r sessionInfo}
