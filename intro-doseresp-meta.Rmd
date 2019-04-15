@@ -177,4 +177,7 @@ with(predict(quadr, expo = TRUE, order = TRUE), {
 })
 ```
 
+```{r sessionInfo}
+sessionInfo()
+```
 
