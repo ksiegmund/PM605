@@ -1,0 +1,179 @@
+---
+title: "Intro-to-Dose-Response"
+author: "ks"
+date: "4/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install Dose-response meta-analysis package
+
+Load libraries.
+
+```{r install}
+install.packages("dosresmeta")
+library(dosresmeta)
+library(tidyverse)
+```
+
+# Case-Control Study 
+
+This data is from a case-control study of alcohol consumption and breast cancer.
+
+```{r ccexample}
+data("cc_ex")
+head(cc_ex)
+```
+
+We need to compute the variance for the logrr, and create a variable indicating the study design (cc = case-control study).
+
+```{r ccmutate}
+cc_ex <- cc_ex %>%
+ mutate(
+  lnl95 = log(lb),
+  lnu95 = log(ub),
+  selnes = (lnu95-lnl95)/3.919928,
+  type = "cc"
+  )
+cc_ex
+```
+
+The software will use the Greenland and Longnecker covariance formula to get the covariances of the logrr from the sample sizes (n) and number of cases (case) for each pair of dose levels.
+
+```{r cccovar}
+covar.logrr(cases = case, n = n, y = logrr, v = selnes^2, 
+type = "cc", data = cc_ex)
+```
+
+Next we run the dose-response meta analysis using the Greenland and Longnecker estimate of the variance-covariance matrix.
+
+```{r ccex}
+lin_le <- dosresmeta(logrr ~ dose, se = selnes, type = type, cases = case, n = n, data = cc_ex)
+summary(lin_le)
+```
+
+```{r predictcc}
+predict(lin_le, newdata = data.frame(dose = c(0,1,5)), expo = TRUE)
+```
+
+This says the trend OR = 1.05 (g/day), with 95\% CI: 1.00 - 1.09.
+
+# Incidence Rate Data
+
+This example studies the association between fiber intake (g/d) and coronary heart disease (CHD). The study compares incidence of CHD using person-years.
+
+```{r irexample}
+data("ir_ex")
+head(ir_ex)
+```
+
+This time we only need to create a variable indicating the study design (ir = incidence rate study).
+
+```{r irmutate}
+ir_ex <- ir_ex %>% 
+  mutate(
+  type = "ir"
+  )
+```
+
+Using type = "ir", the software will use the incidence rate covariance formula to get the covariances of the logrr from the sample sizes (n) and number of cases (case) for each pair of dose levels.
+
+```{r ircovar}
+covar.logrr(cases = cases, n = n, y = logrr, v = se^2, 
+type = "ir", data = ir_ex)
+```
+
+Next we run the dose-response meta analysis using the estimate of the variance-covariance matrix for an incidence rate (type = ir) study.
+
+```{r irdrmeta}
+lin_le <- dosresmeta(logrr ~ dose, se = se, type = type, cases = cases, n = n, data = ir_ex)
+summary(lin_le)
+```
+
+```{r irpredict}
+predict(lin_le, newdata = data.frame(dose = c(0,5,10)), expo = TRUE)
+```
+
+# Cumulative Incidence Rate
+
+Example studying high-fat dairy food (in servings/day) and colorectal cancer risk.
+
+```{r ciexample}
+data("ci_ex")
+head(ci_ex)
+```
+
+Again, we create a variable indicating the study design (ci = cummulative incidence study).
+
+```{r cimutate}
+ci_ex <- ci_ex %>% 
+  mutate(
+  type = "ci"
+  )
+```
+
+The software will use the covariance formula for cumulative incidence ('ci') data to get the covariances of the logrr from the sample sizes (n) and number of cases (case) for each pair of dose levels.
+
+```{r cicovar}
+covar.logrr(cases = cases, n = n, y = logrr, v = se^2, 
+type = "ci", data = ci_ex)
+```
+
+Next we run the dose-response meta analysis using this estimate of the variance-covariance matrix.
+
+```{r cidrmeta}
+lin_le <- dosresmeta(logrr ~ dose, se = se, type = type, cases = cases, n = n, data = ci_ex)
+summary(lin_le)
+```
+
+```{r cipredict}
+predict(lin_le, newdata = data.frame(dose = c(0:4)), expo = TRUE)
+```
+
+This says the trend OR = 0.93, with 95\% CI: 0.89 - 0.97.
+
+# Multiple studies 
+
+```{r alccvd}
+data("alcohol_cvd")
+alcohol_cvd
+```
+
+
+```{r multstudieslintrend}
+lin <- dosresmeta(logrr~dose, id=id, se=se, 
+                  cases = cases, n = n, 
+               type = type, data = alcohol_cvd)
+summary(lin)
+```
+
+```{r predicttrend}
+predict(lin ,delta = 1, expo = TRUE)
+```
+
+Now we'll fit a (non-linear) quadratic trend
+
+```{r qt}
+quadr <- dosresmeta(formula = logrr ~ dose + I(dose^2), 
+                    type = type, id = id,se = se, 
+                    cases = cases, n = n, data = alcohol_cvd)
+summary(quadr)
+```
+
+Let's graph the results.
+
+```{r plotresults}
+with(predict(quadr, expo = TRUE, order = TRUE), {
+   plot(dose, pred, log = "y", type = "l",
+        xlim = c(0, 45), ylim = c(.3, 2.4))
+   lines(dose,  ci.lb, lty = 2)
+   lines(dose, ci.ub, lty = 2)
+   rug(dose, quiet = TRUE)
+   points(alcohol_cvd$dose,exp(alcohol_cvd$logrr),pch=alcohol_cvd$id,col=alcohol_cvd$id)
+})
+```
+
+
