@@ -14,8 +14,9 @@ knitr::opts_chunk$set(echo = TRUE)
 Load libraries.
 
 ```{r install}
-install.packages("dosresmeta")
-library(dosresmeta)
+if(!require("dosresmeta", character.only = TRUE)) 
+    install.packages("dosresmeta")
+library("dosresmeta", character.only = TRUE)
 library(tidyverse)
 ```
 
