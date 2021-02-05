@@ -1,7 +1,7 @@
 ---
 title: "Intro to Meta Analysis"
 author: "K Siegmund"
-date: "2/9/2019"
+date: "2/5/2021"
 output: html_document
 ---
 
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 We will need to install a few packages that are not in standard base r and load them.
 
 ```{r usePackages}
-for (pkg in c("tidyverse", "readxl","dplyr","meta","metafor")) {
+for (pkg in c("tidyverse", "readxl","dplyr","meta","metafor","netmeta")) {
   if(!require(pkg, character.only = TRUE)) 
     install.packages(pkg)
   library(pkg, character.only = TRUE)
@@ -36,31 +36,56 @@ exdata
 * Cevents = Control group, number of events
 * CN = Control group, number of observations
 
+In the Excel spreadsheet on Bb, I gave you the ORs instead. I will compute those now and we can see they will match your spreasheet.
 
-Next, we run the fixed effects model meta analysis for binary data.
+```{r get-sumstats}
+ors <- with(exdata, Tevents*(CN-Cevents)/(TN-Tevents)/Cevents)
+vares <- with(exdata, 1/Tevents + 1/(TN-Tevents) + 1/Cevents + 1/(CN-Cevents))
 
-```{r FixedEffect}
-mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
-               method="I", data=exdata, studlab=Study)
-mb1
+lnes <- log(ors)
+selnes <- sqrt(vares)
+esdata <- cbind.data.frame(ors,
+                           lbs = exp(lnes-1.96*selnes),
+                           ubs = exp(lnes+1.96*selnes),
+                           lnes,
+                           selnes,
+                           Study = exdata$Study)
+esdata
 ```
 
+Do these match the numbers in the Excel spreadsheet?
+
+Now we will do the meta analysis. Our data are the log-odds ratio estimates and their standard errors. 
+```{r FixedEffect-or}
+mb <- metagen(TE=lnes,seTE=selnes, 
+               sm = "OR", backtransf = TRUE,
+               data=esdata, studlab=Study)
+mb
+```
 
 We get a (fixed effect) summary OR of 0.48 with 95\% confidence interval (CI) (0.36, 0.66)  ( p < 0.0001 ).
 
 Instead of just the fixed effects model, we also get the summary from the random effects model.  The output tells us that it uses the DerSimonian-Laird estimator for tau^2 in the random effects model. The summary OR estimate from the random effects model is 0.57 (95\% CI: 0.36-0.91) ( p < 0.02 ). 
 There are other methods we can consider for estimating the summary from the random effects model. I'll leave this discussion for later.
 
+Do these match the summary estimates in the Excel worksheet?
+
 Now let's use a forest plot to display the summary data.
 ```{r ForestPlot,fig.width=10,fig.height=4}
-forest(mb1)
+forest(mb)
+```
+That's the same plot from the video you watched.
+
+Here's how to run these models on the count data directly.
+```{r FixedEffect}
+mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="I", data=exdata, studlab=Study)
+mb1
 ```
 
-Or we can simplify the figure, which allows for larger text.
-```{r SimpleForestPlot,fig.width=9,fig.height=4}
-forest(mb1, comb.random=FALSE, hetstat=FALSE)
-```
+Easy! Right??
 
+The next command will report all the information about our computing environment. This will provide the details of our operating system and software versions if needed at some future date for result reproducibility.
 ```{r sessionInfo}
 sessionInfo()
 ```
