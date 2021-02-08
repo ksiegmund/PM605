@@ -1,0 +1,198 @@
+---
+title: "Practice Fixed Effect and Random Effects Meta-analysis"
+author: "ks"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## Attach libraries.
+
+```{r packages}
+for (pkg in c("tidyverse","MASS", "readxl","dplyr","meta","metafor","netmeta")) 
+   library(pkg, character.only = TRUE)
+```
+
+## Simulation function
+
+I will simulate binary data using the following design:   
+
+** 8 Studies  
+** n1 = n2 in each Study     
+** n1 ~ Negative binomial(mu,mu+mu^2/theta); mu=80,theta=5  
+** p0 = 0.3    
+** or = 2.0
+
+Sample sizes vary from study-to-study following a Negative binomial distribution. What does the distribution look like?
+```{r distn-negbin}
+set.seed(20)
+n1 <- rnegbin(1000,mu=80,theta=5)
+hist(n1,main=paste("mean=",round(mean(n1),0)))
+```
+
+Write a function to compute probability, p, from the odds(p).
+```{r myfunc}
+invodds <- function(x){
+    p <- x/(1+x)
+}
+```
+
+Write a function to simulate data from 1 data set.
+```{r simdat-and-sum}
+study.sum <- function(n1,p1=0.3,or=2.0) {
+        gp  <- factor(rep(c("group1", "group2"), each=n1))
+        # odds(p2) = or*p1/(1-p1)
+        p2  <- invodds(or*p1/(1-p1))
+
+      yvec <- rbinom(n = n1*2, size = 1, 
+                    prob = rep(c(p1,p2),each=n1))
+      tb <- table(yvec,gp)
+       a <- tb[2,2]
+       b <- tb[2,1]
+       c <- tb[1,2]
+       d <- tb[1,1]
+       es <- a*d/b/c
+       lnes <- log(es)
+       selnes <- sqrt(1/a + 1/b + 1/c + 1/d)
+       te <- a
+       tn <- n1
+       ce <- b
+       cn <- n1
+       
+      study.out <- c(te,tn,ce,cn,es,lnes,selnes)
+      study.out
+}
+```
+
+## Common OR=2
+
+Now let's simulate 8 data sets each with True OR = 2.0.
+```{r simdat-commonor}
+nstudy <- 8
+cosumdat <- matrix(NA,nrow=nstudy,ncol=7)
+colnames(cosumdat) <- c("te","tn","ce","cn","es","lnes","selnes")
+set.seed(91)
+n1vec <- rnegbin(nstudy,mu=80,theta=5)
+for (i in 1:nstudy) {
+    cosumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=2.0)
+}
+cosumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),cosumdat)
+cosumdat
+```
+
+
+We can analyze the raw counts using the function metabin().  We'll use the data like this:
+
+* te = Treatment group, number of events
+* tn = Treatment group, number of observations
+* ce = Control group, number of events
+* cn = Control group, number of observations
+
+What do you expect these results to show and why?
+
+```{r metabin}
+mb1 <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=cosumdat)
+forest(mb1)
+```
+
+Hmmmmmm. The fixed effect and random effects summary is the same. Why?
+
+
+##  ln(OR) ~ N(log(2),0.8)
+
+Now let's model the ln(OR) ~ N(log(2),0.8).
+
+First let's see what this distribution gives us.
+```{r dist-lnor}
+set.seed(20)
+simlnor <- rnorm(10000,log(2),0.8)
+hist(simlnor,main=paste("mean=",round(mean(simlnor),3)))
+```
+
+```{r simdat-manytheta}
+nstudy <- 8
+rosumdat <- matrix(NA,nrow=nstudy,ncol=7)
+colnames(rosumdat) <- c("te","tn","ce","cn","es","lnes","selnes")
+#set.seed(98)
+set.seed(20)
+simor <- exp(rnorm(nstudy,log(2),0.8))
+for (i in 1:nstudy) {
+    rosumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=simor[i])
+}
+rosumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),rosumdat)
+rosumdat
+```
+
+```{r plot-true-est-ors}
+
+```
+
+```{r metabin-re}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=rosumdat)
+forest(mb)
+```
+
+What is the summary OR estimate (95% CI)? Which model result should be reported and why?  
+
+## More Studies
+
+What happens if we had 10xs the number of studies?
+How does this affect the summary OR estimate (95% CI) under the common OR model?
+```{r simdat-commonor-morestudies}
+nstudy <- 8*10
+set.seed(99)
+n1vec <- rnegbin(nstudy,mu=50,theta=5)
+sumdat <- matrix(NA,nrow=nstudy,ncol=7)
+colnames(sumdat) <- c("te","tn","ce","cn","es","lnes","selnes")
+for (i in 1:nstudy) {
+    sumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=2.0)
+}
+sumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),sumdat)
+sumdat
+```
+
+```{r metabin5}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=sumdat)
+summary(mb)
+```
+
+```{r simdat-manyor-morestudies}
+# same as above
+#nstudy <- 8*25
+#set.seed(99)
+#n1vec <- rnegbin(nstudy,mu=50,theta=5)
+ 
+sumdat <- matrix(NA,nrow=nstudy,ncol=7)
+set.seed(20)
+colnames(sumdat) <- c("te","tn","ce","cn","es","lnes","selnes")
+simor <- exp(rnorm(nstudy,log(2),0.8))
+for (i in 1:nstudy) {
+    sumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=simor[i])
+}
+sumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),sumdat)
+sumdat
+```
+
+```{r metabin6}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=sumdat)
+summary(mb)
+```
+
+
+```{r sessionInfo}
+sessionInfo()
+```
+
