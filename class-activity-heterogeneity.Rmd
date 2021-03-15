@@ -1,0 +1,262 @@
+---
+title: "Class activity on Heterogeneity"
+author: "ks"
+date: "3/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## Libraries and Functions
+
+```{r packages}
+for (pkg in c("tidyverse","MASS", "readxl","dplyr","meta","metafor","netmeta")) 
+   library(pkg, character.only = TRUE)
+```
+
+Sample sizes vary from study-to-study following a Negative binomial distribution. 
+```{r distn-negbin}
+set.seed(20)
+n1 <- rnegbin(1000,mu=80,theta=5)
+hist(n1,main=paste("mean=",round(mean(n1),0)))
+```
+
+Write a function to compute probability, p, from the odds(p).
+```{r myfunc}
+invodds <- function(x){
+    p <- x/(1+x)
+}
+```
+
+Write a function to simulate data from 1 data set.
+```{r simdat-and-sum}
+study.sum <- function(n1,p1=0.3,or=2.0) {
+      # odds(p2) = or*p1/(1-p1)
+      p2  <- invodds(or*p1/(1-p1))
+
+      yvec <- rbinom(n = 2, size = n1, 
+                    prob = c(p1,p2))
+      study.out <- c(te=yvec[2],
+                     tn=n1,
+                     ce=yvec[1],
+                     cn=n1)
+      study.out
+}
+```
+
+## Simulate Data: small $\tau$
+
+I will simulate binary data using the following design:   
+
+** n1 = n2 in each Study     
+** n1 ~ Negative binomial(mu,mu+mu^2/theta); mu=80,theta=5  
+** p0 = 0.3    
+** ln(OR) ~ N(log(2),0.4).
+
+First let's see what this distribution ln(OR) ~ N(log(2),0.4) gives us.
+```{r dist-lnor}
+set.seed(20)
+simlnor <- rnorm(10000,log(2),0.4)
+hist(simlnor,main=paste("mean=",round(mean(simlnor),3)))
+```
+
+Simulate 100 datasets with random ORs, with logOR~N(log(2),0.4). We will sample from these to do our analysis later.
+```{r simdat-randomor}
+nstudy <- 100
+rosumdat <- matrix(NA,nrow=nstudy,ncol=4)
+colnames(rosumdat) <- c("te","tn","ce","cn")
+set.seed(91)
+n1vec <- rnegbin(nstudy,mu=80,theta=5)
+
+# same 100 sample sizes as above
+set.seed(20)
+simor <- exp(rnorm(nstudy,log(2),0.4))
+for (i in 1:nstudy) {
+    rosumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=simor[i])
+}
+rosumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),rosumdat)
+rosumdat
+```
+
+## small $\tau$; N = 8 studies
+
+```{r simdat-n8}
+set.seed(5)
+idx <- sample(100,8)
+rosumdat.8s <- rosumdat[idx,]
+rosumdat.8s
+```
+
+We can use inverse variance weights to estimate tau.
+```{r metabin-DL8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=rosumdat.8s)
+summary(mb)
+```
+
+What is the summary OR estimate (95% CI)? Which model result should be reported and why?  
+
+There are many methods for estimating tau.  Let's try REML.
+
+```{r metabin-reml8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau ="REML", data=rosumdat.8s)
+summary(mb)
+```
+
+
+```{r metabin-eb8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="EB", data=rosumdat.8s)
+summary(mb)
+```
+
+## small $\tau$; N = 80 studies
+
+What happens if we had 10xs the number of studies?
+
+```{r simdat-n80}
+set.seed(5)
+idx <- sample(100,80)
+rosumdat.80s <- rosumdat[idx,]
+#rosumdat.80s
+```
+
+```{r metabin-DL80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=rosumdat.80s)
+summary(mb)
+```
+
+
+```{r metabin6-reml80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="REML", data=rosumdat.80s)
+summary(mb)
+```
+
+
+```{r metabin-eb80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="EB", data=rosumdat.80s)
+summary(mb)
+```
+
+Same CI, different estimate of tau and tau^2.
+
+How do these results compare to the analysis of just 8 studies?
+
+## Simulate data: big $\tau$
+
+First let's see what this distribution ln(OR) ~ N(log(2),0.8) gives us.
+```{r dist-lnor-bt}
+set.seed(20)
+simlnor <- rnorm(10000,log(2),0.8)
+hist(simlnor,main=paste("mean=",round(mean(simlnor),3)))
+```
+
+Simulate 100 datasets with random ORs, with logOR~N(log(2),0.8). We will sample from these to do our analysis later.
+```{r simdat-bigtau}
+nstudy <- 100
+rosumdat <- matrix(NA,nrow=nstudy,ncol=4)
+colnames(rosumdat) <- c("te","tn","ce","cn")
+set.seed(91)
+n1vec <- rnegbin(nstudy,mu=80,theta=5)
+
+# same 100 sample sizes as above
+set.seed(20)
+simor <- exp(rnorm(nstudy,log(2),0.8))
+for (i in 1:nstudy) {
+    rosumdat[i,] <- study.sum(n1=n1vec[i],p1=0.3,or=simor[i])
+}
+rosumdat <- cbind.data.frame(study = paste0("Study",1:nstudy),rosumdat)
+rosumdat
+```
+
+##  big $\tau$; N = 8 studies
+
+```{r simdat-btn8}
+set.seed(5)
+idx <- sample(100,8)
+rosumdat.8s <- rosumdat[idx,]
+rosumdat.8s
+```
+
+We can use inverse variance weights to estimate tau.
+```{r metabin-btDL8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=rosumdat.8s)
+summary(mb)
+```
+
+
+Now let's estimate tau using REML.
+
+```{r metabin-btreml8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau ="REML", data=rosumdat.8s)
+summary(mb)
+```
+
+Now let's estimate tau using empirical Bayes.
+```{r metabin-bteb8}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="EB", data=rosumdat.8s)
+summary(mb)
+```
+
+## big $\tau$; N = 80 studies
+
+What happens if we had 10xs the number of studies?
+
+```{r simdat-btn80}
+set.seed(5)
+idx <- sample(100,80)
+rosumdat.80s <- rosumdat[idx,]
+#rosumdat.80s
+```
+
+```{r metabin-btDL80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method="I", data=rosumdat.80s)
+summary(mb)
+```
+
+
+```{r metabin6-btreml80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="REML", data=rosumdat.80s)
+summary(mb)
+```
+
+
+```{r metabin-bteb80}
+mb <- metabin(event.e=te, n.e=tn, 
+               event.c=ce, n.c=cn, studlab=study, sm="OR", 
+               method.tau="EB", data=rosumdat.80s)
+summary(mb)
+```
+
+How does the estimate of tau (95% CI) differ using these different estimators and across these different study designs?
+
+## SessionInfo
+
+```{r sessionInfo}
+sessionInfo()
+```
+
