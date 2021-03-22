@@ -1,0 +1,291 @@
+---
+title: "T2DM meta analysis"
+author: "ks"
+date: "3/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## load Libraries and Data
+
+```{r packages}
+for (pkg in c("tidyverse","MASS","purrr", "readxl","dplyr","meta","metafor","netmeta")) 
+   library(pkg, character.only = TRUE)
+
+str_detect = stringr::str_detect
+```
+
+
+```{r load-data}
+data.loc <- c("~kims/Google Drive/My Drive/Teaching/PM605/pm-605-sp2021/week5-feb22/")
+dmbc <-  paste0(data.loc, 
+                                      "PM605DiabetesAndBlad_DATA_2019-05-03_1706_CLEANED.rds") %>% 
+  readRDS()
+```
+
+```{r view}
+dim(dmbc)
+head(dmbc)
+```
+
+
+```{r study-design}
+dmbc %>% group_by(study_design) %>% tally()
+```
+
+```{r prep-data}
+
+ma.dat <-  dmbc %>% 
+              mutate(
+                lnes = log(ratio_est),
+                lnes_l = log(ratio_est_l95),
+                lnes_u = log(ratio_est_u95),
+                selnes = (lnes_u-lnes_l)/3.919928,
+                Study = paste0(first_auth," et al., " , datepub),
+                cases = affected_exp + affected_unexp,
+    
+        # order design variable show it shows correctly in the plot
+                Design = study_design %>% forcats::fct_relevel(c("1. Pro Cht","2. Pop CC","3. Ret Cht",
+                                                           "4. SIR","5. Hosp CC"))
+  )
+
+```
+
+## Meta-analysis
+
+Fit a random effects meta analysis to all the data.
+
+```{r metaa}
+rema <- metagen(lnes, selnes, data = ma.dat, studlab = paste(Study),
+                comb.fixed = FALSE, comb.random = TRUE,  
+                method.tau = "REML",
+                hakn = F, prediction = FALSE, sm = "HR")
+rema
+```
+
+We find there is heterogeneity in OR estimates between studies (Q = 203, 38 df, p<0.0001). Let's see whether there is heterogeneity by study design. We update the meta-analysis object to stratify by study design. 
+```{r rema-design}
+rema.design <- update.meta(rema, 
+                            byvar=Design, 
+                            comb.random = TRUE, 
+                            comb.fixed = FALSE)
+summary(rema.design)
+```
+
+```{r forest}
+png(c("figures/forest.rema.bydesign.png"), 
+    height = 13, width = 6, units='in', res=600)
+
+forest(rema.design,
+       
+       sortvar = datepub_plot,
+       
+       rightcols = c("effect.ci", "w.random"),
+       rightlabs = c("Ratio Est [95% CI]", "Weight"),
+       
+       leftcols = c("studlab"),
+       leftlab = c("Author, Year"),
+       
+       just.addcols = "center",
+       spacing = 1,
+       
+       print.tau2 = FALSE,
+       print.I2.ci = FALSE,
+       
+       ref=1,
+       col.square = "grey30",
+       resid.hetstat=F,
+       fontsize = 8)
+
+dev.off()
+
+```
+
+## High Qual Studies
+
+We're going to only keep studies that are prospective cohort studies or population-based case-control studies.
+
+```{r filter-data}
+hq.ma.dat = 
+  ma.dat %>% 
+  filter(study_design %in% c("1. Pro Cht", "2. Pop CC"))
+```
+
+Now we repeat the meta-analysis.
+```{r ma-hq}
+hq.rema <- metagen(lnes, selnes, data = hq.ma.dat, 
+                  studlab = paste(Study),
+                  comb.fixed = FALSE, comb.random = TRUE,  
+                  method.tau = "DL",
+                  hakn = F, prediction = FALSE, sm = "HR")
+hq.rema
+```
+
+Update the meta object to stratify by design 
+```{r hq-rema-design}
+hq.rema.design <- update.meta(hq.rema, 
+                            byvar=Design, 
+                            comb.random = TRUE, 
+                            comb.fixed = TRUE)
+summary(hq.rema.design)
+```
+
+```{r forest-bydesign}
+png(c("figures/forest.hq.rema.bydesign.png"), 
+    height = 13, width = 6, units='in', res=600)
+
+forest(hq.rema.design,
+       
+       sortvar = datepub_plot,
+       
+       rightcols = c("effect.ci", "w.random"),
+       rightlabs = c("Ratio Est [95% CI]", "Weight"),
+       
+       leftcols = c("studlab"),
+       leftlab = c("Author, Year"),
+       
+       just.addcols = "center",
+       spacing = 1,
+       
+       print.tau2 = FALSE,
+       print.I2.ci = FALSE,
+       
+       ref=1,
+       col.square = "grey30",
+       resid.hetstat=F,
+       fontsize = 8)
+
+dev.off()
+
+```
+
+## Bias
+
+Create a funnel plot to assess potential for publication bias.
+
+```{r funnel-hhq.rema}
+funnel(hq.rema, xlab="Ratio Estimate")
+```
+
+This looks pretty suspicious. 
+
+```{r fixed-mbb}
+funnel(hq.rema,xlab="Ratio Estimate", 
+       contour = c(.95,.975,.99),
+       col.contour=c("darkblue","blue","lightblue"))
+legend(1.6, 0, 
+       c(" 0.05  > p > 0.025",
+          "0.025 > p > 0.01", 
+               " < 0.01"),
+       bty = "n",cex=0.7,
+       fill=c("darkblue","blue","lightblue"))
+```  
+
+This looks very suspicious. Why?
+
+What does Egger's Test give us?
+
+```{r EggerTest}
+et <- metabias(hq.rema, method="mm")
+et
+```
+
+This shows evidence for publication bias (p=0.001).
+
+Next we'll create a cumulative forest plot.
+The cumulative plot is a function in the metafor package, so I have to re-run my meta analysis using the function in the other package.
+We will order the studies from lowest standard error (most precision) to highest standard error (least precision).
+```{r cumplot}
+cuml_meta <- metafor::rma(yi=lnes, sei=selnes, 
+                         data=hq.ma.dat, 
+              slab=paste(first_auth, datepub, sep=", "))
+
+tmp <- cumul(cuml_meta, order=order(hq.ma.dat$selnes))
+ ### cumulative forest plot
+forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ 
+### add column headings to the plot
+text(-1, 16, "Author(s) and Year",  pos=4)
+text( 1, 16, "Ratio Est [95% CI]", pos=2)
+```
+
+Small studies seem to pull the estimate to higher and higher values. If there was no bias, we'd expect the cumulative estimates to fluctuate around a mean.
+
+## Leave one out analysis
+
+```{r metainf}
+mi <- metainf(hq.rema, pooled="random", sortvar=hq.ma.dat$datepub)
+forest(mi, at = c(0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6), 
+       xlim=c(0.8,1.6))
+```
+
+There is hardly a difference in the summary estimate if you omit any single study.
+
+## Meta-Regression
+
+Let's see if the estimates vary by the proportion of female cases in the study.
+
+```{r data-casesbysex}
+#hq.ma.dat %>% select(male_cases,female_cases,cases)
+
+hq.ma.dat <- hq.ma.dat %>%
+              mutate(pctfemale = female_cases/cases,
+                     pctmale = 1-pctfemale)
+```
+
+```{r data-sexratio}
+#hq.ma.dat %>% select(lnes,male_cases,female_cases,cases,pctfemale,pctmale)
+```
+
+
+
+```{r mreg_pctfem}
+ma <- metagen(TE=lnes, seTE=selnes, 
+        studlab = paste(first_auth, datepub, sep=", "), 
+ sm="Ratio Est.", comb.fixed = F, data=hq.ma.dat[!is.na(hq.ma.dat$pctfemale),])
+ma.mr <- metareg(ma,pctfemale,method.tau = "REML")
+print(ma.mr)
+```
+
+```{r bubbleplot}
+bubble(ma.mr,ylab="log TE",xlab="Percent Female")
+```
+
+What is the estimate in males?
+
+```{r mreg_estmales}
+TE.0 <- coef(ma.mr)["intrcpt"]
+seTE.0 <- sqrt(vcov(ma.mr)["intrcpt", "intrcpt"])
+print(metagen(TE.0, seTE.0, sm="RR"), digits=2)
+```
+
+What is the estimate in females?
+
+```{r mreg_pctmale}
+ma.mr <- metareg(ma,pctmale,method.tau = "REML")
+print(ma.mr)
+bubble(ma.mr,ylab="log TE",xlab="Percent Male")
+
+```
+
+```{r mreg_estfemales}
+TE.0 <- coef(ma.mr)["intrcpt"]
+seTE.0 <- sqrt(vcov(ma.mr)["intrcpt", "intrcpt"])
+print(metagen(TE.0, seTE.0, sm="RR"), digits=2)
+```
+
+
+## SessionInfo
+
+```{r si}
+sessionInfo()
+```
