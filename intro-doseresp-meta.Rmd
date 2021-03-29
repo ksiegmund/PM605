@@ -177,6 +177,37 @@ with(predict(quadr, expo = TRUE, order = TRUE), {
 })
 ```
 
+# Let's collapse ORs by dose into an ever/never exposed 
+
+Let's try this for the breast cancer case-control data set.
+
+```{r ccexample}
+data("cc_ex")
+head(cc_ex)
+```
+
+We need to compute the variance for the logrr, and create a variable indicating the study design (cc = case-control study).
+
+```{r ccmutate}
+cc_ex <- cc_ex %>%
+ mutate(
+  lnl95 = log(lb),
+  lnu95 = log(ub),
+  selnes = (lnu95-lnl95)/3.919928,
+  ever = ifelse(dose==0,0,1),
+  type = "cc"
+  )
+cc_ex
+```
+
+
+```{r everexposed}
+lin_le <- dosresmeta(logrr ~ ever, se = selnes, type = type, cases = case, n = n, data = cc_ex)
+predict(lin_le, newdata = data.frame(ever= c(0,1)), expo = TRUE)
+```
+
+This says the OR for breast cancer comparing alcohol drinkers vs non-drinkers  is 1.12, with 95\% CI: 0.79 - 1.59. Notice how the confidence interval contains 1.0 when we don't leverage the dose-response information.
+
 ```{r sessionInfo}
 sessionInfo()
 ```
