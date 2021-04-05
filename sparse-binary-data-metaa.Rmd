@@ -1,0 +1,196 @@
+---
+title: "Sparse data meta-analysis"
+author: "ks"
+date: "4/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## load Libraries 
+
+```{r packages}
+for (pkg in c("tidyverse","MASS","purrr", "readxl","dplyr","meta")) 
+   library(pkg, character.only = TRUE)
+
+str_detect = stringr::str_detect
+```
+
+## Read EFM data 
+
+```{r ReadData}
+exdata <- read_xlsx("~kims/Google Drive/My Drive/Teaching/PM605/pm-605-sp2021/week11-apr5/efmstudy.xlsx",sheet=1)
+exdata
+```
+
+## Default Settings 
+
+What happens if we run a meta-analysis with zero counts in our data set?
+
+```{r mbincc}
+mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=exdata, studlab=Studyno)
+mb1
+```
+
+The output tells us the software used a continuity correction of 0.5 in studies with zero cell frequencies. 
+
+## Treatment Arm weights
+
+Let's try calling the opposite treatment arm sample size weights instead (TACC).
+
+```{r mbintacc}
+mbtacc <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=exdata, incr = "TACC",
+               studlab=Studyno)
+mbtacc
+```
+
+That made a big difference on the OR estimate from study number 2.
+
+## 'Hand' Calculations
+
+Now let's check the calculation of these OR estimates.
+
+```{r get-sumstats}
+ors <- with(exdata, Tevents*(CN-Cevents)/(TN-Tevents)/Cevents)
+vares <- with(exdata, 1/Tevents + 1/(TN-Tevents) + 1/Cevents + 1/(CN-Cevents))
+
+lnes <- log(ors)
+selnes <- sqrt(vares)
+esdata <- cbind.data.frame(Study = exdata$Studyno,
+                           ors,
+                           lbs = exp(lnes-1.96*selnes),
+                           ubs = exp(lnes+1.96*selnes),
+                           lnes,
+                           selnes)
+esdata
+```
+
+```{r metabinoutput}
+mbtacc
+```
+
+Now use a continuity correction based on the inverse treatment sample sizes.
+```{r get-zeros}
+sstudies <- exdata %>% 
+             filter(Tevents==0) %>%
+             mutate(R = CN/TN,
+                    kt = 1/(R+1),
+                    kc = R/(R+1))
+
+ors <- with(sstudies, (Tevents+kt)*(CN-Cevents+kc)/(TN-Tevents+kt)/(Cevents+kc))
+vares <- with(sstudies, 1/(Tevents+kt) + 1/(TN-Tevents+kt) + 1/(Cevents+kc) + 1/(CN-Cevents+kc))
+
+lnes <- log(ors)
+selnes <- sqrt(vares)
+sesdata <- cbind.data.frame(Study = sstudies$Studyno,
+                            ors,
+                           lbs = exp(lnes-1.959964*selnes),
+                           ubs = exp(lnes+1.959964*selnes),
+                           lnes,
+                           selnes)
+sesdata
+```
+
+These match the results from calling incr="TACC".  I think the difference in study 2's UB is rounding error.
+
+## Non-0 study OR
+
+What is the MH estimate fromm the studies with non-zero outcomes in the treatment group?
+
+```{r non-zerostudies}
+essum <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=exdata, 
+               incr="TACC",subset= (Tevents>0),
+               studlab=Studyno)
+essum
+```
+
+For the empirical correction, use estimate of 0.3 in continuity correction.
+
+## Empirical CC
+
+I did not find this analysis as an option in the metabin function. We'll have program this one ourselves.
+
+```{r empirical-zstudies}
+sstudies <- exdata %>% 
+             filter(Tevents==0) %>%
+             mutate(R = CN/TN,
+                    kt = 0.3/(R+0.3),
+                    kc = R/(R+0.3))
+
+ors <- with(sstudies, (Tevents+kt)*(CN-Cevents+kc)/(TN-Tevents+kt)/(Cevents+kc))
+vares <- with(sstudies, 1/(Tevents+kt) + 1/(TN-Tevents+kt) + 1/(Cevents+kc) + 1/(CN-Cevents+kc))
+
+lnes <- log(ors)
+selnes <- sqrt(vares)
+sesdata <- cbind.data.frame(Study = sstudies$Studyno,
+                            Tevents = sstudies$Tevents + sstudies$kt,
+                            TN = sstudies$TN + 2*sstudies$kt,
+                            Cevents = sstudies$Cevents + sstudies$kc,
+                            CN = sstudies$CN + 2*sstudies$kc,
+                            ors,
+                           lbs = exp(lnes-1.96*selnes),
+                           ubs = exp(lnes+1.96*selnes),
+                           lnes,
+                           selnes )
+sesdata
+```
+
+Combine these data with data from the 'non-zero' studies.
+```{r get-ors-nz}
+nzstudies <- exdata %>% 
+             filter(Tevents>0)
+
+ors <- with(nzstudies, (Tevents)*(CN-Cevents)/(TN-Tevents)/(Cevents))
+vares <- with(nzstudies, 1/(Tevents) + 1/(TN-Tevents) + 1/(Cevents) + 1/(CN-Cevents))
+
+lnes <- log(ors)
+selnes <- sqrt(vares)
+nzesdata <- cbind.data.frame(Study = nzstudies$Studyno,
+                             Tevents = nzstudies$Tevents,
+                             TN = nzstudies$TN,
+                             Cevents = nzstudies$Cevents,
+                             CN = nzstudies$CN,
+                             ors,
+                           lbs = exp(lnes-1.96*selnes),
+                           ubs = exp(lnes+1.96*selnes),
+                           lnes,
+                           selnes)
+```
+
+```{r combine}
+empiricalcc <- rbind.data.frame(sesdata,nzesdata)
+empiricalcc
+```
+
+
+```{r empiricalcc}
+essum <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=empiricalcc,
+               studlab=Study)
+essum
+```
+
+Nice! The results match the estimates from the Stat Med 2004 paper.
+
+How different is the summary if we use inverse variance weights?
+```{r empir-inverse}
+essum <- metabin(Tevents, TN, Cevents, CN, sm="OR",
+                 method = "Inverse",data=empiricalcc,
+               studlab=Study)
+essum
+```
+
+The results are similar and also match the estimates from the Stat Med 2004 paper.
+
+## SessionInfo
+
+```{r sI}
+sessionInfo()
+```
