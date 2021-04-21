@@ -163,7 +163,7 @@ Here is the summarized effect estimate.
 predict(lin ,delta = 1, expo = TRUE)
 ```
 
-What does the Q statistic test in this model?  It tests whether there is heterogeneity in the trends estimated for the 6 studies. To show this, I'm going to estimate the trend for each study, and perform a random effects meta-analysis of the 6 estimated trend coefficients.
+What does the Q statistic test in the model above?  It tests whether there is heterogeneity in the trends estimated for the 6 studies. To show this, I'm going to estimate the trend for each study, and perform a random effects meta-analysis of the 6 estimated trend coefficients.
 ```{r meta-eachstudy}
 studytrend <- as.data.frame(matrix(data=NA,6,3))
 colnames(studytrend) <- c("Study","lnes","selnes")
