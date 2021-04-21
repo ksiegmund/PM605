@@ -1,7 +1,7 @@
 ---
 title: "Intro-to-Dose-Response"
 author: "ks"
-date: "4/11/2019"
+date: "4/21/2021"
 output: html_document
 ---
 
@@ -9,18 +9,21 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Install Dose-response meta-analysis package
+# {.tabset}
 
-Load libraries.
+## Load libraries
+
+Install and load the Dose-response meta-analysis package.
 
 ```{r install}
 if(!require("dosresmeta", character.only = TRUE)) 
     install.packages("dosresmeta")
 library("dosresmeta", character.only = TRUE)
 library(tidyverse)
+library(meta)
 ```
 
-# Case-Control Study 
+## Case-Control Study 
 
 This data is from a case-control study of alcohol consumption and breast cancer.
 
@@ -51,7 +54,7 @@ type = "cc", data = cc_ex)
 
 Next we run the dose-response meta analysis using the Greenland and Longnecker estimate of the variance-covariance matrix.
 
-```{r ccex}
+```{r ccex-lm}
 lin_le <- dosresmeta(logrr ~ dose, se = selnes, type = type, cases = case, n = n, data = cc_ex)
 summary(lin_le)
 ```
@@ -62,7 +65,7 @@ predict(lin_le, newdata = data.frame(dose = c(0,1,5)), expo = TRUE)
 
 This says the trend OR = 1.05 (g/day), with 95\% CI: 1.00 - 1.09.
 
-# Incidence Rate Data
+## Incidence Rate Data
 
 This example studies the association between fiber intake (g/d) and coronary heart disease (CHD). The study compares incidence of CHD using person-years.
 
@@ -98,7 +101,7 @@ summary(lin_le)
 predict(lin_le, newdata = data.frame(dose = c(0,5,10)), expo = TRUE)
 ```
 
-# Cumulative Incidence Rate
+## Cumulative Incidence Rate
 
 Example studying high-fat dairy food (in servings/day) and colorectal cancer risk.
 
@@ -136,14 +139,18 @@ predict(lin_le, newdata = data.frame(dose = c(0:4)), expo = TRUE)
 
 This says the trend OR = 0.93, with 95\% CI: 0.89 - 0.97.
 
-# Multiple studies 
+## Multiple studies 
+
+This example includes data from six studies of alcohol intake and cardiovascular disease risk.
 
 ```{r alccvd}
 data("alcohol_cvd")
 alcohol_cvd
 ```
 
+What types of studies are they?
 
+Let's carry out the dose-response meta-analysis.
 ```{r multstudieslintrend}
 lin <- dosresmeta(logrr~dose, id=id, se=se, 
                   cases = cases, n = n, 
@@ -151,9 +158,39 @@ lin <- dosresmeta(logrr~dose, id=id, se=se,
 summary(lin)
 ```
 
+Here is the summarized effect estimate.
 ```{r predicttrend}
 predict(lin ,delta = 1, expo = TRUE)
 ```
+
+What does the Q statistic test in this model?  It tests whether there is heterogeneity in the trends estimated for the 6 studies. To show this, I'm going to estimate the trend for each study, and perform a random effects meta-analysis of the 6 estimated trend coefficients.
+```{r meta-eachstudy}
+studytrend <- as.data.frame(matrix(data=NA,6,3))
+colnames(studytrend) <- c("Study","lnes","selnes")
+studytrend[,1] <- 1:6
+for (i in 1:6) {
+   lin_i <- dosresmeta(logrr ~ dose, se = se, type = type, cases = cases, n = n, data = alcohol_cvd[alcohol_cvd$id==i,])
+   studytrend[i,2:3] <- summary(lin_i)$coef[1:2]
+}
+studytrend
+```
+
+Now we do a meta-analysis of these trends.
+```{r metatrend}
+mb <- metagen(TE=lnes,seTE=selnes, 
+               sm = "OR",backtransf = FALSE,method.tau = "REML",
+               data=studytrend, studlab=Study)
+summary(mb)
+```
+
+Yes! It's the same Q values as from our previous analysis of multiple studies. We calculate it by hand as follows:
+```{r qtest}
+sum(((studytrend$lnes - mb$TE.fixed)/studytrend$selnes)^2 )
+```
+
+Yes, again! That matches the Q-test of heterogeneity. Although the average trend is essentially flat, this statistic supports heterogeneity in the study-level trends.
+
+## Non-linear dose-response
 
 Now we'll fit a (non-linear) quadratic trend
 
@@ -169,6 +206,7 @@ Let's graph the results.
 ```{r plotresults}
 with(predict(quadr, expo = TRUE, order = TRUE), {
    plot(dose, pred, log = "y", type = "l",
+        ylab="ES",
         xlim = c(0, 45), ylim = c(.3, 2.4))
    lines(dose,  ci.lb, lty = 2)
    lines(dose, ci.ub, lty = 2)
@@ -177,18 +215,20 @@ with(predict(quadr, expo = TRUE, order = TRUE), {
 })
 ```
 
-# Let's collapse ORs by dose into an ever/never exposed 
+## Ever/Never exposed
+
+Let's collapse ORs by dose into an ever/never exposed. 
 
 Let's try this for the breast cancer case-control data set.
 
-```{r ccexample}
+```{r ccex}
 data("cc_ex")
 head(cc_ex)
 ```
 
 We need to compute the variance for the logrr, and create a variable indicating the study design (cc = case-control study).
 
-```{r ccmutate}
+```{r ccmutate2}
 cc_ex <- cc_ex %>%
  mutate(
   lnl95 = log(lb),
@@ -208,6 +248,7 @@ predict(lin_le, newdata = data.frame(ever= c(0,1)), expo = TRUE)
 
 This says the OR for breast cancer comparing alcohol drinkers vs non-drinkers  is 1.12, with 95\% CI: 0.79 - 1.59. Notice how the confidence interval contains 1.0 when we don't leverage the dose-response information.
 
+## Session Info
 ```{r sessionInfo}
 sessionInfo()
 ```
