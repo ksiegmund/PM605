@@ -1,0 +1,155 @@
+---
+title: "Example of Network Meta Analysis"
+author: "ks"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## Dataset
+
+```{r libraries}
+if(!require(netmeta)) install.packages("netmeta")
+library(netmeta)
+```
+
+Load dataset:
+```{r data}
+data(Senn2013)
+data15 <- Senn2013
+data15
+```
+
+```{r variable-names}
+names(data15)
+```
+
+
+How many drug comparisons?
+```{r nte}
+nrow(data15)
+```
+
+How many unique studies?
+```{r nstudies}
+length(unique(data15$studlab))
+```
+
+If we have more comparisons than studies, not all comparisons are independent and our network analysis needs to take into account the correlation between treatment comparisons that originate from a single study.  We do this by adjusting the standard errors for the treatment comparisons originating from a single study (make them bigger).
+
+## Network meta-analysis
+
+```{r netmeta}
+mn1 <- netmeta(TE, seTE, treat1, treat2, studlab,
+         data=data15, sm="MD")
+```
+
+
+```{r graph-it}
+netgraph(mn1, seq=c("plac", "benf", "migl", "acar", "sulf",
+                     "metf", "rosi", "piog", "sita", "vild"))
+```
+
+```{r print}
+print.netmeta(mn1)
+```
+
+Summarize output:
+
+```{r summary}
+print(summary(mn1))
+```
+
+## More graphs
+
+Setting multiarm = TRUE  will color treatments from multi-arm studies.
+```{r  moregraphs-multiarm}
+netgraph(mn1, start="random", iterate=TRUE,
+ col="darkgray", cex=1.5, multiarm=TRUE,
+ points=TRUE, col.points="green", cex.points=3)
+```
+
+## Placebo Reference
+
+```{r placebo-ref}
+summary(mn1, ref="plac")
+```
+
+Forest Plot for fixed effect model:
+
+```{r placebo-ref-forest}
+forest(mn1, ref="plac",
+       xlab="HbA1c difference",
+       pooled="fixed")
+```
+
+Forest Plot for random effects model:
+
+```{r placebo-ref-reforest}
+forest(mn1, ref="plac",
+       leftlabs="Contrast to Placebo",
+       xlab="HbA1c difference",
+       pooled="random")
+```
+
+## Heterogeneity
+
+```{r heterogeneity}
+round(decomp.design(mn1)$Q.decomp, 3)
+```
+
+## Net heatmaps
+
+This displays for each treatment effect estimate, two types of information simultaneously. These are:  
+(1) the contribution of each design to this estimate, and  
+(2) the extent of inconsistency due to each design.
+
+For the fixed effect model:
+
+```{r netheat}
+netheat(mn1)
+```
+Rows & columns are the within-design treatment effect estimates. The area of the grey rectangles give the %contribution to the estimate. Largest areas on the diagonal indicate direct effects carry the most weight. Note some rows/columns have several boxes with large areas (e.g. acar:placebo, acar:sulf). labels with _ indicate the 3-treatment study.
+
+The color ranks the between-design contribution to each estimate, with highest in top left corner. So metf:sulf and rosi:sulf designs have the largest between-design heterogeneity. They also contribute inconsistent information to the treatment estimate of the other (Positions 1,2 and 2,1 are red).
+
+For the random effects model:
+
+```{r netheat-random}
+netheat(mn1, random=TRUE)
+```
+
+Using a random effects model reduces the between-design heterogeneity. 
+
+## Bland–Altman Plot 
+
+Here is a plot to assess the effect of heterogeneity
+on treatment effect estimates.
+
+```{r baplot}
+set.seed(125)
+fe <- mn1$TE.nma.fixed
+re <- mn1$TE.nma.random
+plot(jitter((fe+re)/2, 5), jitter(fe-re, 5),
+      xlim=c(-1.2, 1.2),
+      ylim=c(-0.25, 0.25),
+      xlab="Mean treatment effect (in fixed effect and random
+effects model)", 
+      ylab="Difference of treatment effect (fixed effect minus
+random effects model)")
+abline(h=0)
+```
+
+The fixed and random effects estimates are most different for the two studies on the bottom left.
+
+
+## SessionInfo
+
+```{r sessioninfo}
+sessionInfo()
+```
