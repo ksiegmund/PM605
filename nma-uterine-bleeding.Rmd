@@ -1,0 +1,113 @@
+---
+title: "Network Meta Analysis - Uterine Bleeding"
+author: "ks"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## Dataset
+
+```{r libraries}
+if(!require(netmeta)) install.packages("netmeta")
+library(netmeta)
+library(meta)
+library(readxl)
+```
+
+```{r ReadData}
+ubdata <- read_xlsx("~kims/Google Drive/My Drive/Teaching/PM605/2021/week14_apr26/nma-uterine-bleeding.xlsx",sheet="orig-data")
+ubdata
+```
+
+```{r mbin1}
+ma1 <- metabin(t1events, t1n, t2events, t2n, sm="OR", 
+               method="MH", data=ubdata[ubdata$treat2=="Placebo",],
+               studlab=Study)
+ma1
+```
+
+
+```{r mbin2}
+ma2 <- metabin(t1events, t1n, t2events, t2n, sm="OR", 
+               data=ubdata[ubdata$treat2=="LNG",],
+               studlab=Study)
+ma2
+```
+
+## Network meta-analysis
+
+We have a network meta-analysis for binary data that will use the Mantel-Haenszel method.
+```{r netmetabin}
+mn1 <- netmetabin(event1=t1events,n1=t1n,
+               event2=t2events,n2=t2n, treat1, treat2, Study,
+         data=ubdata, sm="OR")
+```
+
+
+```{r graph-it}
+netgraph(mn1, seq=c("Placebo", "COCP", "LNG"))
+```
+
+```{r print}
+print.netmeta(mn1)
+```
+
+Summarize output:
+
+```{r summary}
+print(summary(mn1))
+```
+
+
+## Placebo Reference
+
+```{r placebo-ref}
+summary(mn1, ref="Placebo")
+```
+
+Forest Plot for fixed effect model:
+
+```{r placebo-ref-forest}
+forest(mn1, ref="Placebo",
+       leftlabs="Contrast to Placebo",
+       xlab="Odds Ratio",
+       pooled="fixed")
+```
+
+We can estimate the treatment effect of LNG vs Placebo, but $\it should$ we? 
+
+## combine sORs
+
+What happens if I try to just combine the summary ORs?
+```{r ReadData-sORs}
+ubdata <- read_xlsx("~kims/Google Drive/My Drive/Teaching/PM605/2021/week14_apr26/nma-uterine-bleeding.xlsx",sheet="sORs")
+ubdata
+```
+
+```{r get-TEs}
+selnes <- with(ubdata,(log(`95UB`)-log(`95LB`))/2/1.96)
+esdata <- cbind.data.frame(ubdata,
+                           lnes=log(ubdata$OR),
+                           selnes)
+esdata
+```
+
+```{r netmeta}
+mn1 <- netmeta(TE=lnes,seTE=selnes, treat1, treat2, Study,
+         data=esdata, sm="OR")
+print(mn1)
+```
+
+It looks like I get the same answer, within rounding error.
+
+## SessionInfo
+
+```{r sessioninfo}
+sessionInfo()
+```
