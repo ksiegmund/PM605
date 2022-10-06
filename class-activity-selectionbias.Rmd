@@ -1,7 +1,7 @@
 ---
 title: "Selection Bias in Meta-analysis"
 author: "ks"
-date: "3/8/2021"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -14,7 +14,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Attach libraries.
 
 ```{r packages}
-for (pkg in c("tidyverse","MASS", "readxl","dplyr","meta","metafor","netmeta")) 
+for (pkg in c("tidyverse","MASS", "readxl","dplyr",
+              "meta","metafor")) 
    library(pkg, character.only = TRUE)
 ```
 
@@ -102,6 +103,13 @@ mb1 <- metabin(event.e=te, n.e=tn,
 summary(mb1)
 ```
 
+```{r ForestPlot, fig.height=5, fig.width=4}
+forest(mb1,  atransf=exp,  cex=0.5)
+```  
+
+
+## Cumm. Forest Plot
+
 Here's a cumulative forest plot when there is no biased selection of studies.
 ```{r cummeta}
 res <- rma(yi=mb1$TE, 
@@ -113,6 +121,14 @@ tmp <- cumul(res, order=order(mb1$seTE))
 forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.5)
 ```       
+
+## Leave-1-out 
+
+Here's a leave-one-out analysis to look for single influential studies. This reports the OR and 95% CI after deleting each study, one at a time.
+```{r metinf}
+mif <- metainf(mb1, sortvar = mb1$seTE)
+mif
+```
 
 ## Selection bias
 
