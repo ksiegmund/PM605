@@ -23,7 +23,7 @@ str_detect = stringr::str_detect
 ## Read EFM data 
 
 ```{r ReadData}
-exdata <- read_xlsx("~data/efmstudy.xlsx",sheet=1)
+exdata <- read_xlsx("data/efmstudy.xlsx",sheet=1)
 exdata
 ```
 
