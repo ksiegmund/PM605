@@ -1,7 +1,7 @@
 ---
 title: "Sparse data meta-analysis"
 author: "ks"
-date: "4/5/2021"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -23,7 +23,7 @@ str_detect = stringr::str_detect
 ## Read EFM data 
 
 ```{r ReadData}
-exdata <- read_xlsx("~kims/Google Drive/My Drive/Teaching/PM605/pm-605-sp2021/week11-apr5/efmstudy.xlsx",sheet=1)
+exdata <- read_xlsx("~data/efmstudy.xlsx",sheet=1)
 exdata
 ```
 
