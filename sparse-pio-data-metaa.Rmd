@@ -1,0 +1,115 @@
+---
+title: "Sparse pio data meta-analysis"
+author: "ks"
+date: "4/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## load Libraries 
+
+```{r packages}
+for (pkg in c("tidyverse","MASS","purrr", "readxl","dplyr","meta")) 
+   library(pkg, character.only = TRUE)
+
+str_detect = stringr::str_detect
+```
+
+## Read PIO-BLCA data 
+
+```{r ReadData}
+exdata <- read_xlsx("data/210404-RCT-data-for-Pio-BLCA.xlsx",sheet=1)
+exdata
+```
+
+## Flag = P or O 
+
+Analyze the Per Protocol data (flag="P") and the original Dormandy PROactive results (flag="O").
+
+```{r mbincc}
+sdata <- exdata %>% 
+           filter(is.element(flag,c("P","O")) )
+sdata
+```
+
+```{r mbinccsum}
+mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=sdata, incr = "TACC",
+               studlab=PioRCTs)
+summary(mb1)
+```
+
+## Revised counts
+
+```{r revcounts}
+
+exdata <- read_xlsx("data/210404-RCT-data-for-Pio-BLCA.xlsx",sheet=1)
+sdata <- exdata %>% 
+           filter(is.element(flag,c("P","R")) )
+sdata
+```
+
+```{r }
+mbtacc <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=sdata, incr = "TACC",
+               studlab=PioRCTs)
+summary(mbtacc)
+```
+
+```{r forest}
+forest(mbtacc)
+```
+
+
+## Cumulative Meta-analysis
+
+Cumulative meta-analysis by calendar year.
+Disappointing, but it looks like the figure we created earlier can only be done for linear models, and in our case inverse variance weighting instead of MH summary.
+Before I said the MH OR is preferred. How different are our results if we use the inverse variance weights?
+```{r }
+mbtacc <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="Inverse", 
+               data=sdata, incr = "TACC",
+               studlab=PioRCTs)
+summary(mbtacc)
+```
+
+They don't give me any different results.  I'll use this for the cummulative meta-analysis, instead of programming something from scratch just because it's easier and it doesn't seem like our results are sensitive to the model choice for these data.
+
+```{r cummeta}
+library('metafor')
+res <- rma(yi=mbtacc$TE, 
+           sei=mbtacc$seTE)
+ 
+### cumulative meta-analysis (in the order of seTE)
+tmp <- cumul(res, order=order(sdata$calendar.order))
+### cumulative forest plot
+forest(tmp, xlim=c(-1,1), at=log(c(0.4, 1, 15)), 
+       atransf=exp, digits=c(2,3), cex=0.5)
+```    
+
+
+## Non-zero Summary OR
+
+Let's look at the studies with non-zero events only.
+```{r nonzero}
+cdata <- sdata %>%
+          filter(Tevents>0 & Cevents >0)
+mbtacc <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
+               method="MH", data=cdata, 
+               studlab=PioRCTs)
+summary(mbtacc)
+```
+
+This result looks much the same, which is no surprise given that these 2 studies had >85% of the weight in the analysis of 5 studies.
+
+## SessionInfo
+
+```{r sI}
+sessionInfo()
+```
