@@ -1,7 +1,7 @@
 ---
 title: "Example of Network Meta Analysis"
 author: "ks"
-date: "4/26/2021"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
@@ -53,10 +53,6 @@ mn1 <- netmeta(TE, seTE, treat1, treat2, studlab,
 ```{r graph-it}
 netgraph(mn1, seq=c("plac", "benf", "migl", "acar", "sulf",
                      "metf", "rosi", "piog", "sita", "vild"))
-```
-
-```{r print}
-print.netmeta(mn1)
 ```
 
 Summarize output:
@@ -114,6 +110,7 @@ For the fixed effect model:
 ```{r netheat}
 netheat(mn1)
 ```
+
 Rows & columns are the within-design treatment effect estimates. The area of the grey rectangles give the %contribution to the estimate. Largest areas on the diagonal indicate direct effects carry the most weight. Note some rows/columns have several boxes with large areas (e.g. acar:placebo, acar:sulf). labels with _ indicate the 3-treatment study.
 
 The color ranks the between-design contribution to each estimate, with highest in top left corner. So metf:sulf and rosi:sulf designs have the largest between-design heterogeneity. They also contribute inconsistent information to the treatment estimate of the other (Positions 1,2 and 2,1 are red).
@@ -135,13 +132,14 @@ on treatment effect estimates.
 set.seed(125)
 fe <- mn1$TE.nma.fixed
 re <- mn1$TE.nma.random
+par(mar=c(5,5,2,3))
 plot(jitter((fe+re)/2, 5), jitter(fe-re, 5),
       xlim=c(-1.2, 1.2),
       ylim=c(-0.25, 0.25),
       xlab="Mean treatment effect (in fixed effect and random
 effects model)", 
-      ylab="Difference of treatment effect (fixed effect minus
-random effects model)")
+      ylab="Diff. of treat effect 
+      (FE - RE model ests.)")
 abline(h=0)
 ```
 
