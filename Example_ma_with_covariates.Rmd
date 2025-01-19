@@ -229,7 +229,7 @@ Now we will stratify the estimates by whether or not the study controlled for im
 
 
 ```{r byses}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = ses, comb.fixed=F, data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = ses, common=F, data=data)
 summary(ma)
 ```
 
