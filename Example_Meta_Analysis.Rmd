@@ -87,7 +87,7 @@ mb1
 Easy! Right??
 
 Aside: The DerSimonian-Laird estimator estimates tau^2 by direct calculation, which is convenient if working with Excel or a calculator. The restricted maximum likelihood (REML) estimator, is the default method in R and cannot be computed by direct calculation.
-```{r FixedEffect}
+```{r FixedEffect-REML}
 mb1 <- metabin(Tevents, TN, Cevents, CN, sm="OR", 
                method="I", data=exdata, studlab=Study)
 mb1
