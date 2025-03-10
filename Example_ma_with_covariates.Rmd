@@ -82,7 +82,7 @@ Let's review perform more bias assessment using a cumulative forest plot. We wil
 res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
  
 ### cumulative meta-analysis (in the order of sampling weight)
-tmp <- cumul(res, order=order(data$selnes))
+tmp <- cumul(res, order=data$selnes)
 
  ### cumulative forest plot
 forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
@@ -102,7 +102,7 @@ Let's try this in order of publication year.
 res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
  
 ### cumulative meta-analysis (in the order of publication year)
-tmp <- cumul(res, order=order(data$pub_year))
+tmp <- cumul(res, order=data$pub_year)
  ### cumulative forest plot
 forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.75)
