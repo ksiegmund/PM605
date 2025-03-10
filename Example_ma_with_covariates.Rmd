@@ -65,7 +65,7 @@ summary(ma)
 
 Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
 
-```{r ForestPlot,fig.width=8,fig.height=6}
+```{r ForestPlot, fig.height=8, fig.width=9}
 forest(ma, comb.fixed=FALSE)
 ```
 
