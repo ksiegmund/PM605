@@ -66,7 +66,7 @@ summary(ma)
 Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
 
 ```{r ForestPlot, fig.height=8, fig.width=9}
-forest(ma, comb.fixed=FALSE)
+forest(ma, common=FALSE)
 ```
 
 ## Eval. Bias
@@ -173,9 +173,10 @@ We would conclude that there is asymmetry (p=0.03).
 #summary(reg)
 radial(ma)
 #abline(et$estimate[c(1,3)])
+#The different slopes between the solid line (best fit line) and line #through the origin (yielding the fixed effect estimate) is due to #asymmetry of funnel plot. 
 ```
 
-The different slopes between the solid line (best fit line) and line through the origin (yielding the fixed effect estimate) is due to asymmetry of funnel plot. 
+
 
 ####  Test by Thompson and Sharp (Egger's Test under Mixed Effects model)
 
@@ -195,7 +196,7 @@ We can evaluate the influence of individual studies with a leave-one-out analysi
 mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
 ```
 
-```{r metainfplot}
+```{r metainfplot, fig.width=10}
 forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
 ```
 
@@ -207,15 +208,15 @@ There is hardly a difference in the summary estimate if you omit any single stud
 
 Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
 ```{r bystudytype}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = stype, comb.fixed=F, data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = stype, common=F, data=data)
 summary(ma)
 ```
 
 ```{r ForestPlot2,fig.width=8,fig.height=8}
-forest(ma, comb.fixed=FALSE)
+forest(ma)
 ```
 
-It appears that the effect estimate does not vary depending on the desing of the study (good). Unfortunately we lost the naming of the categorical variable when we read in the data set. I will go back and fix this later.
+It appears that the effect estimate does not vary depending on the design of the study (good). Unfortunately we lost the naming of the categorical variable when we read in the data set. I will go back and fix this later.
 
 stype 1 = Nested case-control
 
@@ -236,7 +237,7 @@ summary(ma)
 The estimates for the studies that did and did not control for SES are rather similar (OR = 0.63 vs 0.67, p = 0.83).  Now let's look whether they controlled for smoking.
 
 ```{r bysmoking}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", byvar = smoking, comb.fixed = F, data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = smoking, common = F, data=data, method.tau = "DL")
 summary(ma)
 ```
 
@@ -247,7 +248,7 @@ The estimates for the studies that did and did not control for smoking are rathe
 Finally, we'll run a meta regression to see if the OR varies as a function of the HPV rate or the Age-adjusted incidence rate.
 
 ```{r reg_hpvrate}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
 ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
 print(ma.mr)
 ```
@@ -259,7 +260,7 @@ bubble(ma.mr)
 ```
 
 ```{r multivreg}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", comb.fixed = F, data=data[!is.na(data$hpvrate),])
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
 metareg(ma,~hpvrate+aair,method.tau = "REML")
 ```
 
