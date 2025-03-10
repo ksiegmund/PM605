@@ -121,7 +121,7 @@ text( 2, 18, "Odds Ratio [95% CI]", pos=2)
 A Funnel plot is a scatter diagram of standard error vs the effect size. In this study it's a plot of the SE(logOR) vs logOR.
 
 ```{r funnelplot}
-funnel(ma, comb.random=FALSE,xlab="OR", 
+funnel(ma, xlab="OR", 
        contour = c(.95,.975,.99),
        col.contour=c("darkblue","blue","lightblue"))
 legend(1.6, 0, 
