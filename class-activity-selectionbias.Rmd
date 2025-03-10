@@ -103,8 +103,8 @@ mb1 <- metabin(event.e=te, n.e=tn,
 summary(mb1)
 ```
 
-```{r ForestPlot, fig.height=5, fig.width=4}
-forest(mb1,  atransf=exp,  cex=0.5)
+```{r ForestPlot}
+forest(mb1,   cex=0.25)
 ```  
 
 
@@ -116,10 +116,10 @@ res <- rma(yi=mb1$TE,
            sei=mb1$seTE)
  
 ### cumulative meta-analysis (in the order of seTE)
-tmp <- cumul(res, order=order(mb1$seTE))
+tmp <- cumul(res, order = mb1$seTE)
 ### cumulative forest plot
 forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
-       atransf=exp, digits=c(2,3), cex=0.5)
+        digits=c(2,3), cex=0.5)
 ```       
 
 ## Leave-1-out 
@@ -145,7 +145,7 @@ summary(mbb)
 ```
 
 ```{r fixed-mbb}
-funnel(mbb, comb.random=FALSE,xlab="OR", 
+funnel(mbb, xlab="OR", 
        contour = c(.95,.975,.99),
        col.contour=c("darkblue","blue","lightblue"))
 legend(1.6, 0, 
@@ -173,7 +173,6 @@ Radial plot:
 ```{r RadialPlot-mbb}
 radial(mbb,ylab="Z-score",
        pch=16)
-abline(et$estimate[1],et$estimate[3])
 ```
 
 
@@ -193,7 +192,7 @@ summary(mbb)
 
 Funnel plot:
 ```{r fixed-mbb2}
-funnel(mbb, comb.random=FALSE,xlab="OR", 
+funnel(mbb, xlab="OR", 
        contour = c(.95,.975,.99),
        col.contour=c("darkblue","blue","lightblue"))
 legend(1.6, 0, 
@@ -217,7 +216,6 @@ Radial plot for asymmetry example:
 ```{r RadialPlot-mbb-noout}
 radial(mbb,ylab="Z-score",
        pch=16)
-abline(et$estimate[1],et$estimate[3])
 ```
 
 
@@ -229,7 +227,7 @@ res <- rma(yi=mbb$TE,
            sei=mbb$seTE)
  
 ### cumulative meta-analysis (in the order of publication year)
-tmp <- cumul(res, order=order(mbb$seTE))
+tmp <- cumul(res, order=mbb$seTE)
  ### cumulative forest plot
 forest(tmp, xlim=c(-1,1), at=log(c(0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.5)
@@ -249,7 +247,7 @@ summary(mbb)
 ```
 
 ```{r fixed-mbb-n12}
-funnel(mbb, comb.random=FALSE,xlab="OR", 
+funnel(mbb, xlab="OR", 
        contour = c(.95,.975,.99),
        col.contour=c("darkblue","blue","lightblue"))
 legend(1.6, 0, 
