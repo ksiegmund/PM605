@@ -1,0 +1,271 @@
+---
+title: "IUD use and Ovarian Cancer Meta Analysis"
+author: "K Siegmund"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset}
+
+## Load R packages
+
+We will need to install a few packages that are not in standard base r and load them.
+
+```{r usePackages}
+for (pkg in c("tidyverse","haven","dplyr","meta","metafor")) {
+  if(!require(pkg, character.only = TRUE)) 
+    install.packages(pkg)
+  library(pkg, character.only = TRUE)
+}
+print('Done installing &/or loading libraries')
+```
+
+## Example Data
+
+**Example: IUD use and Cervical Cancer**
+
+Let's begin by reading in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
+
+```{r ReadData}
+data <- read_dta("data/CCaMetaAPaper.dta")
+data
+```
+
+The effect size from these studies are odds ratios. These will get analyzed on the log scale so we have to transform the data to get the log OR, and it's standard error.  The standard error for the log OR is obtained from its confidence interval. 
+
+```{r DataPrep}
+data <- data %>% 
+  mutate(
+  lnes = log(es),
+  lnl95 = log(l95),
+  lnu95 = log(u95),
+  selnes = (lnu95-lnl95)/3.919928
+  )
+```
+
+## Meta-Analysis
+
+Next, we run both a fixed effect and random effects meta analysis in a single command.
+
+```{r MetaA}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data, backtransf = FALSE)
+summary(ma)
+```
+
+And if we drop the option backtransf = FALSE, we get the results on the OR scale.
+
+```{r MetaA_OR}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data)
+summary(ma)
+```
+
+Now let's use a forest plot to display the summary data. I'm going to drop the fixed effect weights from the figure.
+
+```{r ForestPlot, fig.height=8, fig.width=9}
+forest(ma, common=FALSE)
+```
+
+## Eval. Bias
+
+There are many ways to get biased estimates in a meta-analysis. One concern is publication bias. If investigators only publish findings that achieve statistical significance, only small studies with large effect sizes will achieve statistical significance.  Including this biased subset of small studies can inflate the effect size away from the null. Small clinical studies might have biased effect sizes due to selection bias of the patients.  Only patients thought to be benefited by a drug will be included. A series of methods are proposed to evaluate bias due to small studies.
+
+###  1. Cumulative Forest Plot
+
+Let's review perform more bias assessment using a cumulative forest plot. We will order these by standard error
+
+```{r Cuma-by-SE}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of sampling weight)
+tmp <- cumul(res, order=data$selnes)
+
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ ### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+Let's try this in order of publication year.
+
+```{r Cuma-by-Pubyear}
+### fit random-effects models
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+ 
+### cumulative meta-analysis (in the order of publication year)
+tmp <- cumul(res, order=data$pub_year)
+ ### cumulative forest plot
+forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
+       atransf=exp, digits=c(2,3), cex=0.75)
+ 
+### switch to bold font
+par(cex=0.75, font=2)
+ 
+### add column headings to the plot
+text(-4, 18, "Author(s) and Year",  pos=4)
+text( 2, 18, "Odds Ratio [95% CI]", pos=2)
+```
+
+
+### 2. Funnel Plot
+
+A Funnel plot is a scatter diagram of standard error vs the effect size. In this study it's a plot of the SE(logOR) vs logOR.
+
+```{r funnelplot}
+funnel(ma, xlab="OR", 
+       contour = c(.95,.975,.99),
+       col.contour=c("darkblue","blue","lightblue"))
+legend(1.6, 0, 
+       c(" 0.05  > p > 0.025",
+          "0.025 > p > 0.01", 
+               " < 0.01"),
+       bty = "n",cex=0.7,
+       fill=c("darkblue","blue","lightblue"))
+```
+
+The vertical dashed line gives the fixed effect estimate and the diagonal lines the 95% confidence interval limits. The vertical dotted line gives the mean estimate from the random effects model.  Since the width of the confidence interval is a constant times the standard error, choosing the standard error for the vertical axis yields straight lines for the confidence interval limits.  
+
+We are looking to see if studies with large standard error (small n) are equally distributed around the summary estimate.
+
+### 3. Radial Plot
+
+Another plot for studying small-study bias is called the radial plot. This is a plot of the standardized treatment effect vs the inverse standard error (e.g. log OR/se(log OR)  vs. 1/se(log OR)).  
+
+```{r RadialPlot}
+radial(ma)
+```
+
+Some properties of this figure under a fixed effects model:
+
+1. Var($y_k$) = 1.  
+2. For each study, the slope of the line from (0,0) to ($x_i$,$y_i$) gives the logOR.  
+3. For large se(logOR), points are near 0 on X axis   
+4. For a fixed effects model,  $y_k = \beta_1 x_k$
+
+If there are no small-study effects (biases), the studies are expected to scatter randomly about this line close to the origin.
+
+####  Egger Test
+
+A common test for publication bias is Egger's test. For this, we fit a regression line to the data from the radial plot, and test if the line goes through the origin.
+
+Fit $y_k = \beta_0 + \beta_1 x_k + \epsilon$,  and test $\beta_0 = 0$.
+
+The intuition is that for large SE, small/negative effect sizes are less likely to get published. Thus, the studies near the origin will not be evenly scattered about the regression line, causing a bias in the intercept.
+
+```{r EggerTest}
+et <- metabias(ma, method="linreg")
+et
+```
+
+We would conclude that there is asymmetry (p=0.029).
+
+```{r RadialPlot2}
+# The following code gives the same regression result
+reg <- lm(I(ma$TE/ma$seTE) ~ I(1/ma$seTE))
+summary(reg)
+```
+
+
+
+####  Test by Thompson and Sharp (Egger's Test under Mixed Effects model)
+
+```{r BiasTestREmodel}
+metabias(ma,method="mm")
+```
+
+When we allow for random effects in our model, we estimate less bias (-1.11 vs -1.33) (test of asymmetry p=0.07).
+
+
+##  Influence Plots
+
+
+We can evaluate the influence of individual studies with a leave-one-out analysis.
+
+```{r metainf}
+mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
+```
+
+```{r metainfplot, fig.width=10}
+forest(mi, at = c(0.5,0.6,0.7,0.8), xlim=c(0.4,0.9))
+```
+
+There is hardly a difference in the summary estimate if you omit any single study.
+
+## Heterogeneity
+
+**1. Group Var Effects**
+
+Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
+```{r bystudytype}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = stype, common=F, data=data)
+summary(ma)
+```
+
+```{r ForestPlot2,fig.width=8,fig.height=8}
+forest(ma)
+```
+
+It appears that the effect estimate does not vary depending on the design of the study (good). Unfortunately we lost the naming of the categorical variable when we read in the data set. I will go back and fix this later.
+
+stype 1 = Nested case-control
+
+stype 2 = Population-based
+
+stype 3 = Clinic-based/hospital
+
+stype 4 = other
+
+Now we will stratify the estimates by whether or not the study controlled for important covariates such as SES or smoking history in their analysis. 
+
+
+```{r byses}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = ses, common=F, data=data)
+summary(ma)
+```
+
+The estimates for the studies that did and did not control for SES are rather similar (OR = 0.63 vs 0.67, p = 0.83).  Now let's look whether they controlled for smoking.
+
+```{r bysmoking}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = smoking, common = F, data=data, method.tau = "DL")
+summary(ma)
+```
+
+The estimates for the studies that did and did not control for smoking are rather different (OR = 0.61 vs 0.81, p=0.053).
+
+**2. Cont Var Effects (Meta regression)**
+
+Finally, we'll run a meta regression to see if the OR varies as a function of the HPV rate or the Age-adjusted incidence rate.
+
+```{r reg_hpvrate}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
+ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
+print(ma.mr)
+```
+
+The OR doesn't vary as a function of the HPV rate.
+
+```{r bubbleplot}
+bubble(ma.mr)
+```
+
+```{r multivreg}
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
+metareg(ma,~hpvrate+aair,method.tau = "REML")
+```
+
+If we consider HPV rate and age-adjusted incidence rate in the model together, we find the association between IUD use and cervical cancer varies as a function of the age-adjusted incidence rate adjusting for HPV rate.
+
+## SessionInfo
+
+```{r sessionInfo}
+sessionInfo()
+```
