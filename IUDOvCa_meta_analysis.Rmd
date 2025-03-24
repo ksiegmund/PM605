@@ -31,20 +31,42 @@ print('Done installing &/or loading libraries')
 Let's begin by reading in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
 
 ```{r ReadData}
-data <- read_dta("data/CCaMetaAPaper.dta")
-data
+setwd("~kims/Google Drive/My Drive/Teaching/PM605/2025/copy of IUDs_OC_Review")
+source("R-file_IUDAndIncidentOvaria-Data_R_2025-03-24_1447.r")
 ```
+
+
+```{r}
+colnames(data)
+colidx <- c(1,4,5,14,15,49:54,61:64,67, 238:242)
+subset <- data[!is.element(data$author,c("Tworoger","Tuesley")),colidx] #omit this study
+subset
+```
+
+```{r}
+#subset$multiunspiud_est
+#multiunspiud_lowci
+#multiunspiud_upci
+```
+
+```{r}
+#subset[is.na(subset$multiunspiud_est),]
+#subset[is.element(subset$author,c("Huang","Tuesley","Xia")),]
+```
+
 
 The effect size from these studies are odds ratios. These will get analyzed on the log scale so we have to transform the data to get the log OR, and it's standard error.  The standard error for the log OR is obtained from its confidence interval. 
 
 ```{r DataPrep}
-data <- data %>% 
+subset <- subset[!is.na(subset$multiunspiud_est),]
+subset <- subset %>% 
   mutate(
-  lnes = log(es),
-  lnl95 = log(l95),
-  lnu95 = log(u95),
+  lnes = log(multiunspiud_est),
+  lnl95 = log(multiunspiud_lowci),
+  lnu95 = log(multiunspiud_upci),
   selnes = (lnu95-lnl95)/3.919928
   )
+data <- subset
 ```
 
 ## Meta-Analysis
@@ -52,14 +74,14 @@ data <- data %>%
 Next, we run both a fixed effect and random effects meta analysis in a single command.
 
 ```{r MetaA}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data, backtransf = FALSE)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pubyear), sm="OR", data=data, backtransf = FALSE)
 summary(ma)
 ```
 
 And if we drop the option backtransf = FALSE, we get the results on the OR scale.
 
 ```{r MetaA_OR}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pubyear), sm="OR", data=data)
 summary(ma)
 ```
 
@@ -79,7 +101,7 @@ Let's review perform more bias assessment using a cumulative forest plot. We wil
 
 ```{r Cuma-by-SE}
 ### fit random-effects models
-res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pubyear, sep=", "))
  
 ### cumulative meta-analysis (in the order of sampling weight)
 tmp <- cumul(res, order=data$selnes)
@@ -99,10 +121,10 @@ Let's try this in order of publication year.
 
 ```{r Cuma-by-Pubyear}
 ### fit random-effects models
-res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pub_year, sep=", "))
+res <- rma(yi=lnes, sei=selnes, data=data, slab=paste(author, pubyear, sep=", "))
  
 ### cumulative meta-analysis (in the order of publication year)
-tmp <- cumul(res, order=data$pub_year)
+tmp <- cumul(res, order=data$pubyear)
  ### cumulative forest plot
 forest(tmp, xlim=c(-4,2), at=log(c(0.125, 0.25, 0.5, 1, 2)), 
        atransf=exp, digits=c(2,3), cex=0.75)
@@ -191,7 +213,7 @@ When we allow for random effects in our model, we estimate less bias (-1.11 vs -
 We can evaluate the influence of individual studies with a leave-one-out analysis.
 
 ```{r metainf}
-mi <- metainf(ma, pooled="random", sortvar=data$pub_year)
+mi <- metainf(ma, pooled="random", sortvar=data$pubyear)
 ```
 
 ```{r metainfplot, fig.width=10}
@@ -206,7 +228,7 @@ There is hardly a difference in the summary estimate if you omit any single stud
 
 Now we want to study the heterogeneity in effect estimates by study design (case-control, etc.)
 ```{r bystudytype}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = stype, common=F, data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pubyear), sm="OR", subgroup = design, common=F, data=data)
 summary(ma)
 ```
 
@@ -214,55 +236,18 @@ summary(ma)
 forest(ma)
 ```
 
-It appears that the effect estimate does not vary depending on the design of the study (good). Unfortunately we lost the naming of the categorical variable when we read in the data set. I will go back and fix this later.
+It appears that the effect estimate does not vary depending on the design of the study (good). We probaby want to combine procohort with nestedcase.
 
-stype 1 = Nested case-control
-
-stype 2 = Population-based
-
-stype 3 = Clinic-based/hospital
-
-stype 4 = other
-
-Now we will stratify the estimates by whether or not the study controlled for important covariates such as SES or smoking history in their analysis. 
-
+If we want to stratify the estimates by a study variable to look for heterogeneity, we would use the code that follows. 
 
 ```{r byses}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = ses, common=F, data=data)
+ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pubyear), sm="OR", subgroup = multiunspiud_covariates___parity, common=F, data=data)
 summary(ma)
 ```
 
-The estimates for the studies that did and did not control for SES are rather similar (OR = 0.63 vs 0.67, p = 0.83).  Now let's look whether they controlled for smoking.
-
-```{r bysmoking}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", subgroup = smoking, common = F, data=data, method.tau = "DL")
-summary(ma)
+```{r ForestPlot2,fig.width=8,fig.height=8}
+forest(ma)
 ```
-
-The estimates for the studies that did and did not control for smoking are rather different (OR = 0.61 vs 0.81, p=0.053).
-
-**2. Cont Var Effects (Meta regression)**
-
-Finally, we'll run a meta regression to see if the OR varies as a function of the HPV rate or the Age-adjusted incidence rate.
-
-```{r reg_hpvrate}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
-ma.mr <- metareg(ma,hpvrate,method.tau = "REML")
-print(ma.mr)
-```
-
-The OR doesn't vary as a function of the HPV rate.
-
-```{r bubbleplot}
-bubble(ma.mr)
-```
-
-```{r multivreg}
-ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pub_year), sm="OR", common = F, data=data[!is.na(data$hpvrate),])
-metareg(ma,~hpvrate+aair,method.tau = "REML")
-```
-
-If we consider HPV rate and age-adjusted incidence rate in the model together, we find the association between IUD use and cervical cancer varies as a function of the age-adjusted incidence rate adjusting for HPV rate.
 
 ## SessionInfo
 
