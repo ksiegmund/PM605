@@ -24,32 +24,41 @@ for (pkg in c("tidyverse","haven","dplyr","meta","metafor")) {
 print('Done installing &/or loading libraries')
 ```
 
-## Example Data
+## REDCap Data
 
-**Example: IUD use and Cervical Cancer**
+**Paper: IUD use and Ovarian Cancer**
 
-Let's begin by reading in the data from the paper "Intrauterine device use and cervical cancer: A systematic review and meta-analysis" by Cortessis et al. (2017).
+Let's begin by reading in the data from redcap output. Put the  IUDs_OC_Review/R-file_IUDAndIncidentOvaria-Data_R_2025-03-24_1447.r file and the raw-data_2025-03-24.csv file in the directory where you are running this *.Rmd file, and the next r chunk will read the data into an R object called "data".
 
 ```{r ReadData}
-setwd("~kims/Google Drive/My Drive/Teaching/PM605/2025/copy of IUDs_OC_Review")
+#setwd("~kims/Google Drive/My Drive/Teaching/PM605/2025/copy of IUDs_OC_Review")
 source("R-file_IUDAndIncidentOvaria-Data_R_2025-03-24_1447.r")
 ```
 
 
-```{r}
+Here I subset to the Multiple/unspecified device type and a few other variables.
+
+```{r colnames}
 colnames(data)
+```
+
+```{r subset}
+# save column positions of variables used in the analysis
 colidx <- c(1,4,5,14,15,49:54,61:64,67, 238:242)
-subset <- data[!is.element(data$author,c("Tworoger","Tuesley")),colidx] #omit this study
+
+#omit the studies by "Tworoger" and "Tuesley"
+subset <- data[!is.element(data$author,c("Tworoger","Tuesley")),colidx] 
 subset
 ```
 
-```{r}
+
+```{r, echo=FALSE}
 #subset$multiunspiud_est
 #multiunspiud_lowci
 #multiunspiud_upci
 ```
 
-```{r}
+```{r, echo=FALSE}
 #subset[is.na(subset$multiunspiud_est),]
 #subset[is.element(subset$author,c("Huang","Tuesley","Xia")),]
 ```
@@ -58,15 +67,14 @@ subset
 The effect size from these studies are odds ratios. These will get analyzed on the log scale so we have to transform the data to get the log OR, and it's standard error.  The standard error for the log OR is obtained from its confidence interval. 
 
 ```{r DataPrep}
-subset <- subset[!is.na(subset$multiunspiud_est),]
-subset <- subset %>% 
+data <- subset[!is.na(subset$multiunspiud_est),]
+data <- data %>% 
   mutate(
   lnes = log(multiunspiud_est),
   lnl95 = log(multiunspiud_lowci),
   lnu95 = log(multiunspiud_upci),
   selnes = (lnu95-lnl95)/3.919928
   )
-data <- subset
 ```
 
 ## Meta-Analysis
@@ -236,18 +244,20 @@ summary(ma)
 forest(ma)
 ```
 
-It appears that the effect estimate does not vary depending on the design of the study (good). We probaby want to combine procohort with nestedcase.
+It appears that the effect estimate does not vary depending on the design of the study (good). We probably want to combine procohort with nestedcase because we don't have many replicates of each type and both designs are for a cohort study.
 
-If we want to stratify the estimates by a study variable to look for heterogeneity, we would use the code that follows. 
+Let's see if there's heterogeneity if we consider whether or not the study adjusted for parity.
 
 ```{r byses}
 ma <- metagen(TE=lnes, seTE=selnes, studlab = paste(author, pubyear), sm="OR", subgroup = multiunspiud_covariates___parity, common=F, data=data)
 summary(ma)
 ```
 
-```{r ForestPlot2,fig.width=8,fig.height=8}
+```{r ForestPlot3,fig.width=8,fig.height=8}
 forest(ma)
 ```
+
+There is no evidence of a different result depending on whether or not they adjusted for parity.
 
 ## SessionInfo
 
